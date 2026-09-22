@@ -1,0 +1,8 @@
+opencv-python
+numpy
+torch
+torchvision
+huggingface_hub
+pandas
+tqdm
+ultralytics>=8.3.0

@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lerobot-vision-detector"
+version = "0.1.0"
+description = "Computer vision detection and multi-camera wrapping pipeline for LeRobot datasets and live robot control."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "SinfonIA UniAndes" }
+]
+keywords = ["robotics", "lerobot", "computer-vision", "yolo", "embodied-ai", "dataset-augmentation"]
+dependencies = [
+    "opencv-python",
+    "numpy",
+    "torch",
+    "torchvision",
+    "huggingface_hub",
+    "pandas",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+yolo = [
+    "ultralytics>=8.3.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "black",
+    "ruff",
+]
+
+[project.scripts]
+lerobot-vision-augment = "lerobot_vision_detector.cli.augment:main"
+lerobot-vision-record = "lerobot_vision_detector.cli.record:record"
+lerobot-vision-teleoperate = "lerobot_vision_detector.cli.teleoperate:teleoperate"
+lerobot-vision-eval = "lerobot_vision_detector.cli.eval_policy:eval_policy"
+lerobot-vision-list-classes = "lerobot_vision_detector.cli.list_classes:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lerobot_vision_detector*"]
