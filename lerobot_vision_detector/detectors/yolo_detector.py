@@ -9,13 +9,14 @@ import numpy as np
 import torch
 
 from ..utils.env_check import find_and_import_ultralytics
+from ..utils.model_registry import is_open_vocab_model, resolve_model_path
 from .base import BaseDetector, Box, Detection, DetectionResult, Mask
 
 logger = logging.getLogger("lerobot_vision_detector")
 
 
 class YOLODetector(BaseDetector):
-    """High performance YOLO detector supporting Bounding Boxes and Instance Segmentation."""
+    """High performance YOLO detector supporting Bounding Boxes, Instance Segmentation, and Open-Vocabulary."""
 
     def __init__(
         self,
@@ -32,7 +33,8 @@ class YOLODetector(BaseDetector):
             conf_threshold=conf_threshold,
             device=device,
         )
-        self.model_name_or_path = model_name_or_path
+        self.raw_model_name = model_name_or_path
+        self.resolved_model_path = resolve_model_path(model_name_or_path)
         self.half = half
 
         # Auto-detect device if unspecified
@@ -42,8 +44,15 @@ class YOLODetector(BaseDetector):
         # Load YOLO model
         ultralytics = find_and_import_ultralytics()
         YOLO = ultralytics.YOLO
-        logger.info(f"Loading YOLO model '{model_name_or_path}' on device '{self.device}'...")
-        self.model = YOLO(model_name_or_path)
+        logger.info(f"Loading YOLO model '{self.resolved_model_path}' on device '{self.device}'...")
+        self.model = YOLO(self.resolved_model_path)
+
+        # Check for open-vocabulary capabilities (e.g. YOLO-World)
+        self.is_open_vocab = is_open_vocab_model(self.raw_model_name) or hasattr(self.model, "set_classes")
+        if self.is_open_vocab:
+            logger.info("Initialized as Open-Vocabulary Vision Model.")
+            if self.target_objects:
+                self.set_classes(self.target_objects)
 
         # Warm up if using GPU
         if "cuda" in self.device:
@@ -52,6 +61,32 @@ class YOLODetector(BaseDetector):
                 self.model(dummy, verbose=False, device=self.device)
             except Exception as e:
                 logger.warning(f"Warmup inference failed: {e}")
+
+    def set_classes(self, classes: str | Sequence[str]) -> None:
+        """Dynamically update open-vocabulary text query classes on the model."""
+        if isinstance(classes, str):
+            class_list = [c.strip() for c in classes.split(",") if c.strip()]
+        else:
+            class_list = [str(c).strip() for c in classes if str(c).strip()]
+
+        if hasattr(self.model, "set_classes"):
+            logger.info(f"Setting open-vocabulary classes to: {class_list}")
+            # Ensure ultralytics CLIP model device matches the underlying neural net parameters
+            if hasattr(self.model, "model") and self.model.model is not None:
+                clip_model = getattr(self.model.model, "clip_model", None)
+                if clip_model is not None:
+                    try:
+                        param_dev = next(self.model.model.parameters()).device
+                        clip_model.device = param_dev
+                    except Exception as e:
+                        logger.debug(f"Could not synchronize clip_model device: {e}")
+            self.model.set_classes(class_list)
+            self.target_objects = class_list
+        else:
+            logger.warning(
+                f"Model '{self.raw_model_name}' does not support dynamic open-vocabulary set_classes."
+            )
+            self.target_objects = class_list
 
     def _parse_yolo_result(self, res: Any, start_t: float) -> DetectionResult:
         """Convert a single ultralytics Result object into DetectionResult."""
@@ -203,3 +238,30 @@ class YOLOSegDetector(YOLODetector):
             device=device,
             half=half,
         )
+
+
+class YOLOWorldDetector(YOLODetector):
+    """Specialized YOLO-World Open-Vocabulary Detector.
+
+    Enables detecting arbitrary objects described by free-form natural language text
+    prompts without retraining.
+    """
+
+    def __init__(
+        self,
+        model_name_or_path: str = "yolov8s-worldv2.pt",
+        mode: str = "bbox",
+        target_objects: str | Sequence[str] | None = None,
+        conf_threshold: float = 0.25,
+        device: str | None = None,
+        half: bool = False,
+    ):
+        super().__init__(
+            model_name_or_path=model_name_or_path,
+            mode=mode,
+            target_objects=target_objects,
+            conf_threshold=conf_threshold,
+            device=device,
+            half=half,
+        )
+

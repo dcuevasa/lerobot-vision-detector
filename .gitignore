@@ -208,6 +208,7 @@ __marimo__/
 
 *.TXT
 *.sh
+!scripts/*.sh
 
 .python-version
 *.egg-info/

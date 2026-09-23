@@ -1,0 +1,12 @@
+# Ignore model checkpoint weights in git
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+*.engine
+
+# Preserve folder structure and documentation
+!.gitignore
+!README.md
+!.gitkeep

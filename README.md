@@ -186,6 +186,7 @@ Inspired by `FLAG-Embodied-data` and `scripts/coffee`:
 | `scripts/record_sim_detected.sh` | Records MuJoCo simulation episodes with real-time YOLO camera wrapping. |
 | `scripts/teleop_detected.sh` | Real-time teleoperation with leader arm and live YOLO detections rendered in Rerun. |
 | `scripts/cameras_teleop_detected.sh` | Teleoperates on both physical cameras (`cam_high` + `cam_wrist`) with detections. |
+| `scripts/cameras_teleop_open_vocab.sh` | Open-vocabulary teleoperation on both cameras (e.g. `green tape`, `mug`). |
 | `scripts/eval_detected.sh` | Runs trained policies (ACT / Diffusion) with real-time camera detections. |
 
 ---
@@ -201,11 +202,33 @@ lerobot-vision-list-classes
 # Search for a specific keyword in a model:
 lerobot-vision-list-classes --search cup
 
-# Check classes for a custom checkpoint:
-lerobot-vision-list-classes --model path/to/custom_weights.pt
+# Check classes for any model in models/ or custom weights:
+lerobot-vision-list-classes --model yolov8s-worldv2.pt
 
 # Or using the helper script:
 bash scripts/list_classes.sh --search cup
+```
+
+---
+
+## 6. Standardized `models/` Directory & Open-Vocabulary Models
+
+Pre-downloaded and custom checkpoints reside in [`models/`](file:///home/sinfonia/Documents/experiments/python_experiments/mujoco_lerobot/lerobot-vision-detector/models):
+- `yolov8n.pt`: Fast base YOLOv8 80-class COCO bounding box detector.
+- `yolov8n-seg.pt`: Fast base YOLOv8 80-class instance segmentation mask detector.
+- `yolov8s-worldv2.pt`: Real-time **Open-Vocabulary** detector supporting ANY arbitrary natural language prompt (e.g. `red mug`, `green apple`, `blue tape`).
+- `yolo11-detection-obj_s.pt`: Custom trained object detection model.
+- Hugging Face OWLv2 open-vocabulary models (e.g. `google/owlv2-base-patch16-ensemble`).
+
+All CLI tools and python constructors automatically resolve relative model names (e.g. `--detector.model_name=yolov8s-worldv2.pt`) against the `models/` directory!
+
+### Open-Vocabulary Example:
+```bash
+# Detect arbitrary objects in real-time teleoperation without retraining:
+lerobot-vision-teleoperate \
+    --detector.model_name=yolov8s-worldv2.pt \
+    --detector.target_objects="red mug, screwdriver, blue tape" \
+    --detector.cameras="cam_high,cam_wrist"
 ```
 
 ### Manual Episode Recording Controls:
@@ -218,7 +241,7 @@ When recording episodes with `scripts/record_physical_detected.sh` or `lerobot-v
 
 ---
 
-## 5. Extensibility & Custom Detectors
+## 7. Extensibility & Custom Detectors
 
 The detector architecture is modular and decoupled from LeRobot hardware:
 
@@ -235,9 +258,9 @@ register_detector("sam", CustomSAMDetector)
 
 ---
 
-## 6. Running Tests
+## 8. Running Tests
 
-Run the full verification test suite (13 unit and integration tests):
+Run the full verification test suite (18 unit and integration tests):
 
 ```bash
 python -m unittest discover -s tests -p "test_*.py" -v

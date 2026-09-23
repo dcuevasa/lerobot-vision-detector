@@ -3,7 +3,8 @@
 Provides:
 - Offline dataset augmentation with 2D Bounding Boxes or Instance Segmentation Masks.
 - Real-time Multi-Camera Wrappers for online teleoperation, recording, and policy execution.
-- Extensible vision detector backends (YOLO, YOLO-Seg, Mock).
+- Extensible vision detector backends (YOLO, YOLO-Seg, YOLO-World Open-Vocab, OWLv2, Mock).
+- Standardized models repository directory and path resolution.
 """
 
 from .augmentation import DatasetVideoAugmentor, augment_dataset
@@ -14,10 +15,17 @@ from .detectors import (
     DetectionResult,
     Mask,
     MockDetector,
+    OWLv2Detector,
     YOLOBboxDetector,
     YOLODetector,
     YOLOSegDetector,
+    YOLOWorldDetector,
     make_detector,
+)
+from .utils import (
+    get_models_dir,
+    is_open_vocab_model,
+    resolve_model_path,
 )
 from .wrappers import (
     DetectedCameraWrapper,
@@ -37,6 +45,8 @@ __all__ = [
     "YOLODetector",
     "YOLOBboxDetector",
     "YOLOSegDetector",
+    "YOLOWorldDetector",
+    "OWLv2Detector",
     "MockDetector",
     "make_detector",
     "DetectedCameraWrapper",
@@ -45,4 +55,7 @@ __all__ = [
     "wrap_robot_cameras",
     "DatasetVideoAugmentor",
     "augment_dataset",
+    "get_models_dir",
+    "is_open_vocab_model",
+    "resolve_model_path",
 ]
