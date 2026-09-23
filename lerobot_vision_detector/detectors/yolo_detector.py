@@ -204,6 +204,7 @@ class YOLOBboxDetector(YOLODetector):
     def __init__(
         self,
         model_name_or_path: str = "yolov8n.pt",
+        mode: str = "bbox",
         target_objects: str | Sequence[str] | None = None,
         conf_threshold: float = 0.25,
         device: str | None = None,
@@ -211,7 +212,7 @@ class YOLOBboxDetector(YOLODetector):
     ):
         super().__init__(
             model_name_or_path=model_name_or_path,
-            mode="bbox",
+            mode=mode,
             target_objects=target_objects,
             conf_threshold=conf_threshold,
             device=device,
@@ -225,6 +226,7 @@ class YOLOSegDetector(YOLODetector):
     def __init__(
         self,
         model_name_or_path: str = "yolov8n-seg.pt",
+        mode: str = "seg",
         target_objects: str | Sequence[str] | None = None,
         conf_threshold: float = 0.25,
         device: str | None = None,
@@ -232,7 +234,7 @@ class YOLOSegDetector(YOLODetector):
     ):
         super().__init__(
             model_name_or_path=model_name_or_path,
-            mode="seg",
+            mode=mode,
             target_objects=target_objects,
             conf_threshold=conf_threshold,
             device=device,

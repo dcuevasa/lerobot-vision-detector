@@ -187,6 +187,7 @@ Inspired by `FLAG-Embodied-data` and `scripts/coffee`:
 | `scripts/teleop_detected.sh` | Real-time teleoperation with leader arm and live YOLO detections rendered in Rerun. |
 | `scripts/cameras_teleop_detected.sh` | Teleoperates on both physical cameras (`cam_high` + `cam_wrist`) with detections. |
 | `scripts/cameras_teleop_open_vocab.sh` | Open-vocabulary teleoperation on both cameras (e.g. `green tape`, `mug`). |
+| `scripts/teleop_mask_mug.sh` | Teleoperates with real-time instance segmentation mask over a mug. |
 | `scripts/eval_detected.sh` | Runs trained policies (ACT / Diffusion) with real-time camera detections. |
 
 ---
