@@ -1,13 +1,14 @@
 #!/bin/bash
+rm -rf /home/sinfonia/.cache/huggingface/lerobot/local/so101_detected_dataset
 
 # =====================================================================
 # 1. HARDWARE & PORT SETUP
 # =====================================================================
-FOLLOWER_PORT="/dev/ttyACM1"
-LEADER_PORT="/dev/ttyACM0"
+FOLLOWER_PORT="/dev/ttyACM0"
+LEADER_PORT="/dev/ttyACM1"
 
 FOLLOWER_ID="follower_arm_test4"
-LEADER_ID="leader_arm_test2"
+LEADER_ID="leader_arm_test3"
 
 # Fix permissions automatically if serial devices exist
 if [ -e "$FOLLOWER_PORT" ] || [ -e "$LEADER_PORT" ]; then

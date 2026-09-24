@@ -9,6 +9,19 @@ import logging
 from pprint import pformat
 import time
 
+from lerobot.utils.import_utils import register_third_party_plugins
+
+# Discover and register all third-party plugins (robots, teleoperators, policies)
+try:
+    register_third_party_plugins()
+except Exception:
+    pass
+
+try:
+    import lerobot_teleoperator_so101_ik.so101physicalwrapper  # noqa: F401
+except ImportError:
+    pass
+
 from lerobot.configs import parser
 from lerobot.processor import make_default_processors
 from lerobot.robots import make_robot_from_config

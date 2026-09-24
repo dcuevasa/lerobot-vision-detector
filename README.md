@@ -67,8 +67,8 @@ Take any existing recorded LeRobot dataset (from local disk or downloaded from H
 ```bash
 # Augment 'cam_high' with bounding boxes for "cup" and publish locally:
 python -m lerobot_vision_detector.cli.augment \
-    --input_repo "bendca61/so101-test-leader-v1" \
-    --output_repo "bendca61/so101-test-leader-v1-cup-bbox" \
+    --input_repo "<your-hf-username>/so101-test-leader-v1" \
+    --output_repo "<your-hf-username>/so101-test-leader-v1-cup-bbox" \
     --cameras cam_high \
     --mode bbox \
     --target_objects "cup" \
@@ -76,8 +76,8 @@ python -m lerobot_vision_detector.cli.augment \
 
 # Augment 'cam_high' and 'cam_wrist' with segmentation masks for "cup" and "tape" and push to Hugging Face Hub:
 python -m lerobot_vision_detector.cli.augment \
-    --input_repo "bendca61/so101-test-leader-v1" \
-    --output_repo "bendca61/so101-test-leader-v1-segmented" \
+    --input_repo "<your-hf-username>/so101-test-leader-v1" \
+    --output_repo "<your-hf-username>/so101-test-leader-v1-segmented" \
     --cameras cam_high cam_wrist \
     --mode seg \
     --target_objects "cup,tape" \
@@ -87,12 +87,10 @@ python -m lerobot_vision_detector.cli.augment \
 
 ### Ready-to-Use Bash Script:
 
-Inspired by `scripts/coffee/split_subtasks.sh`:
-
 ```bash
 bash scripts/augment_dataset.sh \
-    "bendca61/so101-test-leader-v1" \
-    "bendca61/so101-test-leader-v1-cup-bbox" \
+    "<your-hf-username>/so101-test-leader-v1" \
+    "<your-hf-username>/so101-test-leader-v1-cup-bbox" \
     "cam_high" \
     "bbox" \
     "cup" \
@@ -114,8 +112,8 @@ detector = make_detector(
 
 augmentor = DatasetVideoAugmentor(detector=detector)
 out_path = augmentor.augment(
-    input_repo="bendca61/so101-test-leader-v1",
-    output_repo="bendca61/so101-test-leader-v1-cup-seg",
+    input_repo="<your-hf-username>/so101-test-leader-v1",
+    output_repo="<your-hf-username>/so101-test-leader-v1-cup-seg",
     cameras=["cam_high"],       # Unspecified cameras like 'cam_wrist' remain untouched!
     output_dir="./outputs/so101_cup_seg",
     push_to_hub=True,
@@ -175,8 +173,6 @@ wrapped_cameras = wrap_cameras(
 
 ## 4. Hardware & Teleoperation Scripts
 
-Inspired by `FLAG-Embodied-data` and `scripts/coffee`:
-
 | Script | Purpose |
 | --- | --- |
 | `scripts/list_classes.sh` | Lists and searches all available detectable object classes for any YOLO model. |
@@ -214,7 +210,7 @@ bash scripts/list_classes.sh --search cup
 
 ## 6. Standardized `models/` Directory & Open-Vocabulary Models
 
-Pre-downloaded and custom checkpoints reside in [`models/`](file:///home/sinfonia/Documents/experiments/python_experiments/mujoco_lerobot/lerobot-vision-detector/models):
+Pre-downloaded and custom checkpoints reside in [`models/`](models/):
 - `yolov8n.pt`: Fast base YOLOv8 80-class COCO bounding box detector.
 - `yolov8n-seg.pt`: Fast base YOLOv8 80-class instance segmentation mask detector.
 - `yolov8s-worldv2.pt`: Real-time **Open-Vocabulary** detector supporting ANY arbitrary natural language prompt (e.g. `red mug`, `green apple`, `blue tape`).

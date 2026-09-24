@@ -18,7 +18,7 @@ FOLLOWER_ID="${FOLLOWER_ID:-follower_arm_test4}"
 LEADER_ID="${LEADER_ID:-leader_arm_test2}"
 
 # Open-vocabulary parameters
-TARGET_OBJECT="${1:-gray tape}"
+TARGET_OBJECT="${1:-green tape}"
 DETECTOR_MODE="${2:-bbox}"
 MODEL_NAME="${3:-yolov8s-worldv2.pt}"
 

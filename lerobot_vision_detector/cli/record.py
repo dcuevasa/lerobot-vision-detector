@@ -7,11 +7,25 @@ allowing episode recording directly into LeRobot datasets with detections embedd
 
 from dataclasses import dataclass, field, asdict
 import logging
+import os
 from pathlib import Path
 from pprint import pformat
 import sys
 import time
 from typing import Any, Sequence
+
+from lerobot.utils.import_utils import register_third_party_plugins
+
+# Discover and register all third-party plugins (robots, teleoperators, policies)
+try:
+    register_third_party_plugins()
+except Exception:
+    pass
+
+try:
+    import lerobot_teleoperator_so101_ik.so101physicalwrapper  # noqa: F401
+except ImportError:
+    pass
 
 from lerobot.configs import parser
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -129,7 +143,7 @@ def init_manual_episode_listener() -> tuple[object | None, dict[str, bool]]:
                     time.sleep(0.01)
 
         def _run_unix(self):
-            import select, termios, tty
+            import os, select, sys, termios, tty
             fd = sys.stdin.fileno()
             old_settings = termios.tcgetattr(fd)
             try:
@@ -148,6 +162,8 @@ def init_manual_episode_listener() -> tuple[object | None, dict[str, bool]]:
                                 self._handle_key("esc")
                         elif ch in (b'\n', b'\r'): self._handle_key("enter")
                         elif ch == b' ': self._handle_key("space")
+            except Exception as e:
+                logger.debug(f"Keyboard listener exception: {e}")
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
@@ -324,10 +340,16 @@ def record(cfg: DetectedRecordConfig) -> LeRobotDataset:
     finally:
         if listener is not None:
             listener.stop()
-        if robot.is_connected:
-            robot.disconnect()
-        if teleop is not None and teleop.is_connected:
-            teleop.disconnect()
+        if robot is not None and getattr(robot, "is_connected", False):
+            try:
+                robot.disconnect()
+            except Exception as e:
+                logger.warning(f"Error during robot disconnect: {e}")
+        if teleop is not None and getattr(teleop, "is_connected", False):
+            try:
+                teleop.disconnect()
+            except Exception as e:
+                logger.warning(f"Error during teleop disconnect: {e}")
 
     return dataset
 

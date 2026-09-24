@@ -29,7 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--input_repo",
         type=str,
         required=True,
-        help="Input LeRobot dataset identifier (e.g. 'bendca61/so101-test-leader-v1' or local path).",
+        help="Input LeRobot dataset identifier (e.g. '<user>/so101-test-leader-v1' or local path).",
     )
     parser.add_argument(
         "--output_repo",

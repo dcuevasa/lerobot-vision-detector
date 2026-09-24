@@ -13,7 +13,7 @@ elif [ -f "dcuevas_hf_token.sh" ]; then
     . "dcuevas_hf_token.sh"
 fi
 
-INPUT_REPO="${1:-bendca61/so101-test-leader-v1}"
+INPUT_REPO="${1:-local/so101_dataset}"
 OUTPUT_REPO="${2:-${INPUT_REPO}-detected}"
 CAMERAS="${3:-cam_high}"
 MODE="${4:-bbox}"
