@@ -150,7 +150,16 @@ class DatasetVideoAugmentor:
 
         # 1. Load source dataset
         logger.info(f"Loading source dataset: {input_repo}...")
-        src_root = Path(local_dir) if local_dir else None
+        if local_dir:
+            src_root = Path(local_dir)
+        else:
+            src_root = Path.home() / ".cache" / "huggingface" / "lerobot" / input_repo
+
+        if not (src_root / "meta" / "info.json").exists() and not Path(input_repo).exists():
+            logger.info(f"Downloading dataset '{input_repo}' to '{src_root}' via snapshot_download...")
+            src_root.mkdir(parents=True, exist_ok=True)
+            snapshot_download(repo_id=input_repo, repo_type="dataset", local_dir=str(src_root), token=hf_token)
+
         src_ds = LeRobotDataset(input_repo, root=src_root)
 
         # 2. Identify video keys to process vs pass through
