@@ -157,15 +157,14 @@ class DatasetVideoAugmentor:
         logger.info(f"Loading source dataset: {input_repo}...")
         if local_dir:
             src_root = Path(local_dir)
+            if not (src_root / "meta" / "info.json").exists() and not Path(input_repo).exists():
+                logger.info(f"Downloading dataset '{input_repo}' to '{src_root}' via snapshot_download...")
+                src_root.mkdir(parents=True, exist_ok=True)
+                snapshot_download(repo_id=input_repo, repo_type="dataset", local_dir=str(src_root), token=hf_token)
+            src_ds = LeRobotDataset(input_repo, root=src_root)
         else:
-            src_root = Path.home() / ".cache" / "huggingface" / "lerobot" / input_repo
-
-        if not (src_root / "meta" / "info.json").exists() and not Path(input_repo).exists():
-            logger.info(f"Downloading dataset '{input_repo}' to '{src_root}' via snapshot_download...")
-            src_root.mkdir(parents=True, exist_ok=True)
-            snapshot_download(repo_id=input_repo, repo_type="dataset", local_dir=str(src_root), token=hf_token)
-
-        src_ds = LeRobotDataset(input_repo, root=src_root)
+            # Let LeRobot manage hub dataset loading and caching natively
+            src_ds = LeRobotDataset(input_repo)
 
         # 2. Identify video keys to process vs pass through
         video_keys = list(src_ds.meta.video_keys)
