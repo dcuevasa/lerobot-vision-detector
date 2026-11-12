@@ -167,6 +167,8 @@ class GroundedSAMDetector(BaseDetector):
         for i in range(num_items):
             label = str(raw_res.labels[i]).strip()
             score = float(raw_res.scores[i])
+            if not label:
+                continue
 
             # Extract bounding box [x1, y1, x2, y2]
             box_coords = raw_res.boxes[i].cpu().tolist()
