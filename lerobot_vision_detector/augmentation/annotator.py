@@ -117,6 +117,7 @@ class DatasetVideoAugmentor:
         overwrite: bool = False,
         vcodec: str = "libsvtav1",
         batch_size: int = 16,
+        stride: int = 1,
         max_episodes: int | None = None,
     ) -> Path:
         """Run detection pipeline on the specified cameras of an input dataset.
@@ -133,6 +134,7 @@ class DatasetVideoAugmentor:
             overwrite: If True, overwrite existing output directory.
             vcodec: Video codec for encoding (default libsvtav1).
             batch_size: Frame batch size for GPU detection.
+            stride: Frame detection stride (e.g. stride=2 runs inference on every 2nd frame, speeding up 2x).
             max_episodes: Optional limit on number of episodes to process (for debugging).
 
         Returns:
@@ -293,40 +295,48 @@ class DatasetVideoAugmentor:
                 raw_frames = decoded_videos[vk]
                 annotated_frames = np.empty_like(raw_frames)
 
-                # Process in batches for maximum GPU throughput
-                for b_start in range(0, num_frames, batch_size):
-                    b_end = min(b_start + batch_size, num_frames)
-                    batch_raw = [raw_frames[j] for j in range(b_start, b_end)]
+                effective_stride = max(1, int(stride))
 
-                    # Run batched detector inference
-                    batch_results = self.detector.predict_batch(batch_raw)
+                # 1. Identify strided keyframe indices
+                keyframe_indices = list(range(0, num_frames, effective_stride))
+                keyframe_raw = [raw_frames[k] for k in keyframe_indices]
 
-                    # Annotate frames
-                    for j, (frame, det_res) in enumerate(zip(batch_raw, batch_results)):
-                        idx = b_start + j
-                        annotated = self.detector.annotate(
-                            image=frame,
-                            result=det_res,
-                            mode=self.mode,
-                            target_objects=self.target_objects,
-                            conf_threshold=self.conf_threshold,
-                            mask_alpha=self.mask_alpha,
-                            box_thickness=self.box_thickness,
-                        )
-                        annotated_frames[idx] = annotated
+                # 2. Run batched detector inference ONLY on keyframes
+                keyframe_results: list[Any] = []
+                for b_start in range(0, len(keyframe_raw), batch_size):
+                    b_end = min(b_start + batch_size, len(keyframe_raw))
+                    batch_raw = keyframe_raw[b_start:b_end]
+                    batch_res = self.detector.predict_batch(batch_raw)
+                    keyframe_results.extend(batch_res)
 
-                        # Log detection atom for visualizer if matches target
-                        filtered = det_res.filter_by_targets(self.target_objects, self.conf_threshold)
-                        if not filtered.is_empty:
-                            for det in filtered.detections:
-                                ep_box_atoms.append({
-                                    "frame": idx,
-                                    "timestamp": idx / fps,
-                                    "camera": vk,
-                                    "class_name": det.class_name,
-                                    "confidence": det.confidence,
-                                    "box_xyxy": det.box.xyxy if det.box else None,
-                                })
+                # 3. Annotate ALL frames (propagating keyframe detections smoothly)
+                for idx in range(num_frames):
+                    key_idx = min(idx // effective_stride, len(keyframe_results) - 1)
+                    det_res = keyframe_results[key_idx]
+
+                    annotated = self.detector.annotate(
+                        image=raw_frames[idx],
+                        result=det_res,
+                        mode=self.mode,
+                        target_objects=self.target_objects,
+                        conf_threshold=self.conf_threshold,
+                        mask_alpha=self.mask_alpha,
+                        box_thickness=self.box_thickness,
+                    )
+                    annotated_frames[idx] = annotated
+
+                    # Log detection atom for visualizer if matches target
+                    filtered = det_res.filter_by_targets(self.target_objects, self.conf_threshold)
+                    if not filtered.is_empty:
+                        for det in filtered.detections:
+                            ep_box_atoms.append({
+                                "frame": idx,
+                                "timestamp": idx / fps,
+                                "camera": vk,
+                                "class_name": det.class_name,
+                                "confidence": det.confidence,
+                                "box_xyxy": det.box.xyxy if det.box else None,
+                            })
 
                 # Replace raw video with annotated video
                 decoded_videos[vk] = annotated_frames

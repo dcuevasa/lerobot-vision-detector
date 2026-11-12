@@ -130,6 +130,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Frame batch size for GPU inference (default: 16).",
     )
     parser.add_argument(
+        "--stride",
+        type=int,
+        default=1,
+        help="Keyframe detection stride (e.g. --stride 2 or --stride 3 speeds up inference 2-3x by propagating masks).",
+    )
+    parser.add_argument(
         "--max_episodes",
         type=int,
         default=None,
@@ -172,6 +178,7 @@ def main() -> None:
         hf_token=args.hf_token,
         overwrite=args.overwrite,
         batch_size=args.batch_size,
+        stride=args.stride,
         max_episodes=args.max_episodes,
     )
 
