@@ -41,18 +41,134 @@ It is purpose-built to solve two primary robotics workflows:
 
 ## 1. Quickstart & Installation
 
-This project is configured to use the same pyenv (`lerobot`) as the parent workspace:
+`lerobot-vision-detector` supports multiple vision model backends (YOLO, Grounded-SAM, SAM 2). Because deep vision packages (such as Grounding DINO CUDA C++ kernels, Ultralytics YOLO, and PyTorch VLA policies) have distinct dependency constraints, **managing environments carefully prevents version clashes**.
+
+### Architecture: Isolated Virtual Environments (Recommended)
+
+To avoid breaking PyTorch CUDA toolkits or clobbering package versions (`transformers`, `supervision`, `numpy`), we strongly recommend keeping separate virtual environments or using our pre-built Docker container:
+
+```
+                            +-------------------------------------------+
+                            |       Robotics Workspace Root             |
+                            +-------------------------------------------+
+                                                  |
+                  +-------------------------------+-------------------------------+
+                  |                               |                               |
+                  v                               v                               v
+    [ venv-lerobot / main ]               [ venv-yolo ]               [ venv-grounded-sam ]
+    • LeRobot core / drivers              • Ultralytics YOLO          • Grounding DINO (CUDA _C)
+    • Policy Training (ACT/Diffusion)     • Fast Bbox / Seg           • SAM ViT-B / ViT-H
+    • PyAV / Rerun telemetry              • OpenCV / TorchVision      • Transformers / NumPy < 2
+                  \                               |                               /
+                   \                              |                              /
+                    +-----------------------------+-----------------------------+
+                                                  |
+                                                  v
+                               +-------------------------------------+
+                               |   lerobot-vision-detector (Core)    |
+                               |  Auto-resolves sister environments  |
+                               +-------------------------------------+
+```
+
+---
+
+### Option A: 100% Pre-Configured Docker (Zero Clash, Zero Host Touch)
+
+On the **Lenovo PGX (NVIDIA GB10 Blackwell)** or GPU workstations running Docker, everything is pre-compiled and isolated:
+
+```bash
+cd ~/Tesis
+# All dependencies, Grounded-SAM sm_121 CUDA kernels, and LeRobot are pre-linked:
+./pgx-training/docker/run.sh python -m lerobot_vision_detector.cli.augment --help
+```
+
+---
+
+### Option B: Dedicated `venv` for Grounded-SAM (Host / Deployment PC)
+
+If installing directly on a Linux workstation or deployment host, set up a dedicated virtual environment to guarantee that Grounding DINO does not overwrite your LeRobot or YOLO libraries:
+
+#### 1. Create and Activate Dedicated Environment
+```bash
+# Python 3.10 or 3.11 recommended (Python 3.12 supported with the patched fork)
+python3 -m venv ~/venvs/grounded-sam
+source ~/venvs/grounded-sam/bin/activate
+pip install --upgrade pip setuptools wheel
+```
+
+#### 2. Install PyTorch with your matching CUDA Toolkit
+Ensure PyTorch matches your local CUDA version (e.g. CUDA 12.1 or 12.4):
+```bash
+# Example for CUDA 12.1:
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+```
+
+#### 3. Clone the Patched Grounded-SAM Fork
+```bash
+git clone https://github.com/dcuevasa/Grounded-Segment-Anything
+cd Grounded-Segment-Anything
+```
+
+#### 4. Install Dependencies with Version Guarding
+> **CRITICAL: Avoid Version Clashes!**
+> - **`numpy < 2.0.0`**: Grounding DINO and `pycocotools` C++ extensions fail with ABI errors on NumPy 2.x.
+> - **`supervision <= 0.10.0`**: Retains compatibility with Grounded-SAM annotation helpers without API deprecation breaks.
+> - **`--no-deps` on SAM**: Segment Anything should be installed without clobbering torchvision.
+
+```bash
+# Install core support libraries
+pip install "numpy<2.0.0" pycocotools addict yapf timm supervision==0.10.0
+pip install transformers
+
+# Install Grounding DINO with CUDA acceleration:
+export CUDA_HOME=/usr/local/cuda  # Path to nvcc compiler
+export BUILD_WITH_CUDA=1
+cd GroundingDINO
+pip install -e . --no-build-isolation
+cd ..
+
+# Install Segment Anything (SAM) without dependency overriding:
+pip install -e segment_anything --no-deps
+```
+
+#### 5. Download Pre-trained Weights
+```bash
+# Grounding DINO Swin-T (662 MB)
+wget -q https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth
+
+# SAM ViT-Base (358 MB - Fast throughput ~25ms)
+wget -q https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
+
+# SAM ViT-Huge (2.4 GB - Ultra fine detail)
+wget -q https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth
+```
+
+#### 6. Link `lerobot-vision-detector`
+Install `lerobot-vision-detector` into this venv in editable mode without clobbering dependencies:
+```bash
+cd /path/to/lerobot-vision-detector
+pip install -e . --no-deps
+```
+
+#### 7. Verify Grounded-SAM
+```bash
+python -c "from grounded_sam import GroundedSAM; print('GroundedSAM loaded successfully!')"
+```
+
+---
+
+### Option C: Standard LeRobot Base Environment (YOLO Detector Only)
+
+If you only need fast YOLO bounding boxes or segmentations:
 
 ```bash
 cd lerobot-vision-detector
 pip install -e . --no-deps
+pip install ultralytics
 ```
 
-> **Note on YOLO (Ultralytics):**
-> `lerobot-vision-detector` automatically discovers `ultralytics` if it is installed in the active environment or in sister pyenv environments (such as `yolo`). Alternatively, install it directly:
-> ```bash
-> pip install ultralytics
-> ```
+> **Automatic PyEnv / Venv Discovery:**
+> `lerobot-vision-detector` automatically discovers `ultralytics` or `grounded-sam` across sister pyenv/venv environments or neighboring workspace directories (`GROUNDED_SAM_PATH`).
 
 ---
 
