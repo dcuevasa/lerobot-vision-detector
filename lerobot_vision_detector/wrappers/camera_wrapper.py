@@ -36,6 +36,10 @@ class DetectedCameraWrapper(Camera):
         enabled: bool = True,
         mask_alpha: float = 0.45,
         box_thickness: int = 2,
+        detector_type: str = "yolo",
+        model_name: str | None = None,
+        device: str | None = None,
+        **kwargs: Any,
     ):
         # We initialize the parent Camera class with a dummy or cloned config
         dummy_config = getattr(base_camera, "config", None)
@@ -60,10 +64,13 @@ class DetectedCameraWrapper(Camera):
 
         if detector is None:
             self.detector: BaseDetector = make_detector(
-                detector_type="yolo",
+                detector_type=detector_type,
+                model_name=model_name,
                 mode=mode,
                 target_objects=target_objects,
                 conf_threshold=conf_threshold,
+                device=device,
+                **kwargs,
             )
         else:
             self.detector = detector

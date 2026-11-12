@@ -72,11 +72,14 @@ def teleoperate(cfg: DetectedTeleoperateConfig) -> None:
         wrap_robot_cameras(
             robot=robot,
             camera_keys=target_cams,
+            detector_type=cfg.detector.detector_type,
             mode=cfg.detector.mode,
             target_objects=target_objs,
             conf_threshold=cfg.detector.conf_threshold,
             model_name=cfg.detector.model_name,
             device=cfg.detector.device,
+            sam_version=cfg.detector.sam_version,
+            text_threshold=cfg.detector.text_threshold,
         )
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()

@@ -53,11 +53,14 @@ logger = logging.getLogger("lerobot_vision_record")
 class VisionDetectorConfig:
     """Configuration for real-time vision detection on camera feeds."""
     enabled: bool = True
+    detector_type: str = "yolo"  # 'yolo', 'grounded_sam', 'owlv2', or 'mock'
     mode: str = "bbox"  # "bbox", "seg", or "both"
     cameras: str = "all"  # Comma-separated camera names, or 'all'
     target_objects: str | None = None  # Comma-separated target classes, or None for all
-    model_name: str | None = None  # e.g. 'yolov8n.pt' or 'yolov8n-seg.pt'
+    model_name: str | None = None  # e.g. 'yolov8n.pt', 'yolov8n-seg.pt', 'vit_h', 'vit_b'
     conf_threshold: float = 0.25
+    text_threshold: float = 0.25
+    sam_version: str | None = None  # 'vit_h' or 'vit_b' for Grounded-SAM
     device: str | None = None
 
 
@@ -205,11 +208,14 @@ def record(cfg: DetectedRecordConfig) -> LeRobotDataset:
         wrap_robot_cameras(
             robot=robot,
             camera_keys=target_cams,
+            detector_type=cfg.detector.detector_type,
             mode=cfg.detector.mode,
             target_objects=target_objs,
             conf_threshold=cfg.detector.conf_threshold,
             model_name=cfg.detector.model_name,
             device=cfg.detector.device,
+            sam_version=cfg.detector.sam_version,
+            text_threshold=cfg.detector.text_threshold,
         )
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()

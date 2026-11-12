@@ -11,28 +11,30 @@ It is purpose-built to solve two primary robotics workflows:
 ## Architecture Overview
 
 ```
-                                 +------------------------------+
-                                 |  YOLO / Vision Model Backend |
-                                 | (YOLO-Bbox, YOLO-Seg, etc.)  |
-                                 +--------------+---------------+
-                                                |
-                     +--------------------------+--------------------------+
-                     |                                                     |
-                     v                                                     v
-      +------------------------------+                      +------------------------------+
-      |  Offline Dataset Augmentor   |                      |  Real-Time Camera Wrappers   |
-      |   (DatasetVideoAugmentor)    |                      | (MultiCameraVisionWrapper)   |
-      +--------------+---------------+                      +--------------+---------------+
-                     |                                                     |
-     Processes ONLY Specified Cameras                      Wraps ONLY Specified Cameras
-     Unspecified Cameras are Preserved                     Unspecified Cameras are Untouched
-                     |                                                     |
-                     v                                                     v
-      +------------------------------+                      +------------------------------+
-      |  New LeRobotDataset + Videos |                      | Live Observations / Training |
-      |  + lerobot_annotations.json  |                      | & Evaluation (ACT, Diffusion)|
-      |  + Publish to Hugging Face   |                      | + Live Rerun Stream          |
-      +------------------------------+                      +------------------------------+
+                                 +----------------------------------------------+
+                                 |         Vision Model Backends                |
+                                 |  - YOLO (Bbox, Seg, YOLO-World)              |
+                                 |  - Grounded-SAM (Grounding DINO + SAM)       |
+                                 |  - Custom Detector Classes                   |
+                                 +----------------------+-----------------------+
+                                                        |
+                             +--------------------------+--------------------------+
+                             |                                                     |
+                             v                                                     v
+              +------------------------------+                      +------------------------------+
+              |  Offline Dataset Augmentor   |                      |  Real-Time Camera Wrappers   |
+              |   (DatasetVideoAugmentor)    |                      | (MultiCameraVisionWrapper)   |
+              +--------------+---------------+                      +--------------+---------------+
+                             |                                                     |
+             Processes ONLY Specified Cameras                      Wraps ONLY Specified Cameras
+             Unspecified Cameras are Preserved                     Unspecified Cameras are Untouched
+                             |                                                     |
+                             v                                                     v
+              +------------------------------+                      +------------------------------+
+              |  New LeRobotDataset + Videos |                      | Live Observations / Training |
+              |  + lerobot_annotations.json  |                      | & Evaluation (ACT, Diffusion)|
+              |  + Publish to Hugging Face   |                      | + Live Rerun Stream          |
+              +------------------------------+                      +------------------------------+
 ```
 
 ---
@@ -97,8 +99,28 @@ bash scripts/augment_dataset.sh \
     --push_to_hub
 ```
 
+### Augmenting with Grounded-SAM (Grounding DINO + SAM):
+
+Grounded-SAM provides state-of-the-art open-vocabulary phrase grounding and promptable pixel-level segmentation. It is especially effective for top-down table manipulation views where standard COCO models struggle with perspective shifts:
+
+```bash
+python -m lerobot_vision_detector.cli.augment \
+    --input_repo "<your-hf-username>/so101-surface-transfer-v1" \
+    --output_repo "<your-hf-username>/so101-surface-transfer-v1-gsam" \
+    --cameras cam_high \
+    --detector_type grounded_sam \
+    --sam_version vit_b \
+    --mode both \
+    --target_objects "cup, plate, robot" \
+    --conf_threshold 0.25 \
+    --text_threshold 0.25 \
+    --push_to_hub \
+    --overwrite
+```
+
 ### Python API:
 
+#### 1. YOLO Backend
 ```python
 from lerobot_vision_detector import DatasetVideoAugmentor, make_detector
 
@@ -119,6 +141,27 @@ out_path = augmentor.augment(
     push_to_hub=True,
     overwrite=True,
 )
+```
+
+#### 2. Grounded-SAM Backend (Open-Vocabulary Grounding + Segmentation)
+```python
+from lerobot_vision_detector import make_detector
+
+# Initialize GroundedSAM detector
+detector = make_detector(
+    detector_type="grounded_sam",  # or "gsam"
+    sam_version="vit_b",           # "vit_b" (fast, ~25ms) or "vit_h" (high accuracy, ~90ms)
+    target_objects="cup, plate, robot",
+    conf_threshold=0.25,
+    text_threshold=0.25,
+    mode="both",                   # "bbox", "seg", or "both"
+)
+
+# Inference on RGB frame (numpy array or PIL image)
+result = detector.predict(frame_rgb)
+
+# Render detections (bounding box overlay and/or semi-transparent segmentation masks)
+annotated_frame = detector.annotate(frame_rgb, result)
 ```
 
 ---
@@ -216,6 +259,10 @@ Pre-downloaded and custom checkpoints reside in [`models/`](models/):
 - `yolov8s-worldv2.pt`: Real-time **Open-Vocabulary** detector supporting ANY arbitrary natural language prompt (e.g. `red mug`, `green apple`, `blue tape`).
 - `yolo11-detection-obj_s.pt`: Custom trained object detection model.
 - Hugging Face OWLv2 open-vocabulary models (e.g. `google/owlv2-base-patch16-ensemble`).
+- **Grounded-Segment-Anything (Grounded-SAM)**:
+  - `groundingdino_swint_ogc.pth`: Swin-Transformer based Grounding DINO text-grounded detector.
+  - `sam_vit_b_01ec64.pth`: Segment Anything ViT-Base checkpoint (~25ms segmentation latency on GPU).
+  - `sam_vit_h_4b8939.pth`: Segment Anything ViT-Huge checkpoint (maximum mask granularity).
 
 All CLI tools and python constructors automatically resolve relative model names (e.g. `--detector.model_name=yolov8s-worldv2.pt`) against the `models/` directory!
 

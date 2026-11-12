@@ -38,6 +38,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Target repository identifier for the augmented dataset (e.g. 'user/so101-test-detected').",
     )
     parser.add_argument(
+        "--detector_type",
+        type=str,
+        default="yolo",
+        choices=["yolo", "grounded_sam", "owlv2", "mock"],
+        help="Detector architecture: 'yolo', 'grounded_sam', 'owlv2', or 'mock'. Default: yolo.",
+    )
+    parser.add_argument(
+        "--sam_version",
+        type=str,
+        default=None,
+        choices=["vit_h", "vit_b"],
+        help="SAM backbone for Grounded-SAM ('vit_h' for highest quality, 'vit_b' for speed).",
+    )
+    parser.add_argument(
+        "--text_threshold",
+        type=float,
+        default=0.25,
+        help="Text similarity threshold for open-vocabulary detectors like Grounded-SAM (default: 0.25).",
+    )
+    parser.add_argument(
         "--cameras",
         type=str,
         nargs="+",
@@ -132,11 +152,14 @@ def main() -> None:
         targets = [t.strip() for t in args.target_objects.split(",") if t.strip()]
 
     augmentor = DatasetVideoAugmentor(
+        detector_type=args.detector_type,
         mode=args.mode,
         target_objects=targets,
         conf_threshold=args.conf_threshold,
         model_name=args.model_name,
         device=args.device,
+        sam_version=args.sam_version,
+        text_threshold=args.text_threshold,
     )
 
     out_path = augmentor.augment(

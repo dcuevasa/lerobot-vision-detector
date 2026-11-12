@@ -16,6 +16,7 @@ def wrap_robot_cameras(
     robot: Robot,
     camera_keys: Sequence[str] | str | None = None,
     detector: BaseDetector | None = None,
+    detector_type: str = "yolo",
     mode: str = "bbox",  # "bbox", "seg", or "both"
     target_objects: str | Sequence[str] | None = None,
     conf_threshold: float = 0.25,
@@ -55,6 +56,7 @@ def wrap_robot_cameras(
         cameras=robot.cameras,
         camera_keys=camera_keys,
         detector=detector,
+        detector_type=detector_type,
         mode=mode,
         target_objects=target_objects,
         conf_threshold=conf_threshold,

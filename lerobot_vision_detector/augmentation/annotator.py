@@ -74,6 +74,7 @@ class DatasetVideoAugmentor:
     def __init__(
         self,
         detector: BaseDetector | None = None,
+        detector_type: str = "yolo",
         mode: str = "bbox",  # "bbox", "seg", or "both"
         target_objects: str | Sequence[str] | None = None,
         conf_threshold: float = 0.25,
@@ -82,6 +83,7 @@ class DatasetVideoAugmentor:
         half: bool = False,
         mask_alpha: float = 0.45,
         box_thickness: int = 2,
+        **kwargs: Any,
     ):
         self.mode = mode
         self.target_objects = target_objects
@@ -91,13 +93,14 @@ class DatasetVideoAugmentor:
 
         if detector is None:
             self.detector: BaseDetector = make_detector(
-                detector_type="yolo",
+                detector_type=detector_type,
                 model_name=model_name,
                 mode=mode,
                 target_objects=target_objects,
                 conf_threshold=conf_threshold,
                 device=device,
                 half=half,
+                **kwargs,
             )
         else:
             self.detector = detector
@@ -211,17 +214,31 @@ class DatasetVideoAugmentor:
 
         # 5. Create new LeRobotDataset
         logger.info(f"Creating augmented LeRobotDataset '{output_repo}' at {out_path}...")
-        new_ds = LeRobotDataset.create(
-            repo_id=output_repo,
-            fps=src_ds.meta.fps,
-            root=out_path,
-            robot_type=src_ds.meta.robot_type,
-            features=data_features,
-            use_videos=use_videos,
-            image_writer_processes=0,
-            image_writer_threads=4 if use_videos else 0,
-            vcodec=vcodec,
-        )
+        create_kwargs: dict[str, Any] = {
+            "repo_id": output_repo,
+            "fps": src_ds.meta.fps,
+            "root": out_path,
+            "robot_type": src_ds.meta.robot_type,
+            "features": data_features,
+            "use_videos": use_videos,
+            "image_writer_processes": 0,
+            "image_writer_threads": 4 if use_videos else 0,
+        }
+
+        import inspect
+        create_sig_params = inspect.signature(LeRobotDataset.create).parameters
+        if "rgb_encoder" in create_sig_params:
+            try:
+                from lerobot.configs.video import RGBEncoderConfig
+                create_kwargs["rgb_encoder"] = RGBEncoderConfig(vcodec=vcodec, video_backend="pyav")
+            except Exception:
+                pass
+            if "video_backend" in create_sig_params:
+                create_kwargs["video_backend"] = "pyav"
+        elif "vcodec" in create_sig_params:
+            create_kwargs["vcodec"] = vcodec
+
+        new_ds = LeRobotDataset.create(**create_kwargs)
 
         total_episodes = src_ds.meta.total_episodes
         if max_episodes is not None and max_episodes > 0:
@@ -253,8 +270,10 @@ class DatasetVideoAugmentor:
                     vid_path = src_ds.root / vid_file_rel
 
                     # Decode returns (N, C, H, W) in [0, 1]
+                    backend = getattr(src_ds, "video_backend", getattr(src_ds, "_video_backend", "pyav"))
+                    tol = getattr(src_ds, "tolerance_s", getattr(src_ds, "_tolerance_s", 0.0001))
                     frames_tensor = decode_video_frames(
-                        vid_path, shifted_ts, src_ds.tolerance_s, src_ds.video_backend
+                        vid_path, shifted_ts, tol, backend
                     )
                     # Convert to (N, H, W, C) uint8 numpy
                     frames_np = (

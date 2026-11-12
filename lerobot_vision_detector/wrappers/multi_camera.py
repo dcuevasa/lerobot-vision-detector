@@ -32,6 +32,8 @@ class MultiCameraVisionWrapper:
         device: str | None = None,
         mask_alpha: float = 0.45,
         box_thickness: int = 2,
+        detector_type: str = "yolo",
+        **kwargs: Any,
     ):
         self.raw_cameras = cameras
         self.mode = mode
@@ -51,12 +53,13 @@ class MultiCameraVisionWrapper:
         # Instantiate shared detector if none provided
         if detector is None:
             self.detector: BaseDetector = make_detector(
-                detector_type="yolo",
+                detector_type=detector_type,
                 model_name=model_name,
                 mode=mode,
                 target_objects=target_objects,
                 conf_threshold=conf_threshold,
                 device=device,
+                **kwargs,
             )
         else:
             self.detector = detector
@@ -114,6 +117,7 @@ def wrap_cameras(
     cameras: dict[str, Camera],
     camera_keys: Sequence[str] | str | None = None,
     detector: BaseDetector | None = None,
+    detector_type: str = "yolo",
     mode: str = "bbox",
     target_objects: str | Sequence[str] | None = None,
     conf_threshold: float = 0.25,
@@ -141,6 +145,7 @@ def wrap_cameras(
         cameras=cameras,
         camera_keys=camera_keys,
         detector=detector,
+        detector_type=detector_type,
         mode=mode,
         target_objects=target_objects,
         conf_threshold=conf_threshold,

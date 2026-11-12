@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Sequence
 from ..utils.model_registry import is_open_vocab_model, resolve_model_path
 from .base import BaseDetector, Box, Detection, DetectionResult, Mask
+from .grounded_sam_detector import GroundedSAMDetector
 from .mock_detector import MockDetector
 from .owl_detector import OWLv2Detector
 from .yolo_detector import YOLOBboxDetector, YOLODetector, YOLOSegDetector, YOLOWorldDetector
@@ -16,6 +17,9 @@ _DETECTOR_REGISTRY: dict[str, type[BaseDetector]] = {
     "yolo_world": YOLOWorldDetector,
     "open_vocab": YOLOWorldDetector,
     "owlv2": OWLv2Detector,
+    "grounded_sam": GroundedSAMDetector,
+    "grounded-sam": GroundedSAMDetector,
+    "gsam": GroundedSAMDetector,
     "mock": MockDetector,
 }
 
@@ -85,6 +89,16 @@ def make_detector(
             **kwargs,
         )
 
+    if dtype in ("grounded_sam", "grounded-sam", "gsam"):
+        return GroundedSAMDetector(
+            model_name_or_path=model_name or "vit_h",
+            mode=mode,
+            target_objects=target_objects,
+            conf_threshold=conf_threshold,
+            device=device,
+            **kwargs,
+        )
+
     if dtype not in _DETECTOR_REGISTRY:
         raise ValueError(
             f"Unknown detector type '{detector_type}'. Available: {list(_DETECTOR_REGISTRY.keys())}"
@@ -139,6 +153,7 @@ __all__ = [
     "YOLOSegDetector",
     "YOLOWorldDetector",
     "OWLv2Detector",
+    "GroundedSAMDetector",
     "MockDetector",
     "make_detector",
     "register_detector",

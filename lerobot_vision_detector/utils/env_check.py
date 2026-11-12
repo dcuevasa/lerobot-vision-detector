@@ -48,3 +48,53 @@ def find_and_import_ultralytics() -> Any:
         "Could not import 'ultralytics'. Please install it using `pip install ultralytics` "
         "or ensure the 'yolo' pyenv virtual environment is present."
     )
+
+
+def find_and_import_grounded_sam() -> tuple[Any, Any]:
+    """Import GroundedSAM and GroundedSAMResult, checking sys.path, workspace, and sister paths.
+
+    Returns:
+        tuple (GroundedSAM, GroundedSAMResult) classes.
+
+    Raises:
+        ImportError: If grounded_sam cannot be imported or found.
+    """
+    try:
+        from grounded_sam import GroundedSAM, GroundedSAMResult
+        return GroundedSAM, GroundedSAMResult
+    except (ImportError, ModuleNotFoundError):
+        pass
+
+    import os
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    candidates: list[Path] = []
+
+    # 1. Explicit environment variable
+    if os.environ.get("GROUNDED_SAM_PATH"):
+        candidates.append(Path(os.environ["GROUNDED_SAM_PATH"]))
+
+    # 2. Sister repository in workspace
+    candidates.append(repo_root.parent / "Grounded-Segment-Anything")
+    candidates.append(Path("/workspace/Grounded-Segment-Anything"))
+    candidates.append(Path.cwd() / "Grounded-Segment-Anything")
+    candidates.append(Path.cwd().parent / "Grounded-Segment-Anything")
+    candidates.append(Path.home() / "Tesis" / "Grounded-Segment-Anything")
+
+    for cand in candidates:
+        if cand.is_dir() and (cand / "grounded_sam").is_dir():
+            for p in [cand, cand / "GroundingDINO", cand / "segment_anything"]:
+                if p.is_dir() and str(p) not in sys.path:
+                    sys.path.insert(0, str(p))
+            try:
+                from grounded_sam import GroundedSAM, GroundedSAMResult
+                logger.info(f"Loaded grounded_sam from path: {cand}")
+                return GroundedSAM, GroundedSAMResult
+            except (ImportError, ModuleNotFoundError) as err:
+                logger.debug(f"Attempted to import from {cand} but failed: {err}")
+                continue
+
+    raise ImportError(
+        "Could not import 'grounded_sam'. Ensure 'Grounded-Segment-Anything' is present in your "
+        "workspace, in PYTHONPATH, or set the GROUNDED_SAM_PATH environment variable."
+    )
+

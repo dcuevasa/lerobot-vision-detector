@@ -23,6 +23,11 @@ KNOWN_OPEN_VOCAB_MODELS = {
     "yolo11x-world.pt",
     "google/owlv2-base-patch16-ensemble",
     "google/owlvit-base-patch32",
+    "grounded_sam",
+    "grounded-sam",
+    "groundingdino_swint_ogc.pth",
+    "sam_vit_b_01ec64.pth",
+    "sam_vit_h_4b8939.pth",
 }
 
 
