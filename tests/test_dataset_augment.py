@@ -1,5 +1,6 @@
 """Unit tests for offline dataset augmentation."""
 
+import json
 import shutil
 import tempfile
 import unittest
@@ -10,7 +11,12 @@ root = Path(__file__).resolve().parent.parent
 if str(root) not in sys.path:
     sys.path.insert(0, str(root))
 
-from lerobot_vision_detector.augmentation import DatasetVideoAugmentor, match_camera_key
+from lerobot_vision_detector.augmentation import (
+    DatasetVideoAugmentor,
+    extract_target_from_prompt,
+    match_camera_key,
+    parse_target_list,
+)
 from lerobot_vision_detector.detectors import make_detector
 
 
@@ -26,7 +32,43 @@ class TestDatasetAugment(unittest.TestCase):
         # All match
         self.assertTrue(match_camera_key("observation.images.wrist_cam", {"all"}))
 
-    def test_offline_augment_single_episode(self):
+    def test_extract_target_from_prompt(self):
+        candidates = "mug, bowl, remote, bottle, cellphone"
+        self.assertEqual(
+            parse_target_list(" mug , bowl, Mug , cellphone "),
+            ["mug", "bowl", "cellphone"],
+        )
+        self.assertEqual(
+            extract_target_from_prompt(
+                "Move the mug from the pink surface to the yellow surface",
+                candidates,
+            ),
+            "mug",
+        )
+        self.assertEqual(
+            extract_target_from_prompt(
+                "Move the cellphone from the blue surface to the pink surface",
+                candidates,
+            ),
+            "cellphone",
+        )
+        # Whole-word check: 'cupboard' should not match 'cup'
+        self.assertIsNone(
+            extract_target_from_prompt("Put the object in the cupboard", "cup, bowl")
+        )
+        # Earliest mention wins; longer phrase wins tie at same start position
+        self.assertEqual(
+            extract_target_from_prompt(
+                "Pick the measuring cup next to the bowl",
+                "cup, measuring cup, bowl",
+            ),
+            "measuring cup",
+        )
+        self.assertIsNone(
+            extract_target_from_prompt("Move the plate to the tray", candidates)
+        )
+
+    def test_offline_augment_single_episode_with_prompt_target(self):
         source_repo = "bendca61/mujoco-so101-cube_on_tray-mouse-v1"
         output_repo = "local/test_unittest_cube"
 
@@ -34,7 +76,18 @@ class TestDatasetAugment(unittest.TestCase):
         try:
             out_dir = tmp_dir / "augmented_dataset"
             mock_det = make_detector("mock", mode="bbox", default_class="cube")
-            augmentor = DatasetVideoAugmentor(detector=mock_det, mode="bbox", target_objects="cube")
+            recorded_classes: list[list[str]] = []
+
+            def _mock_set_classes(classes):
+                recorded_classes.append(list(classes))
+                mock_det.default_class = str(classes[0])
+
+            mock_det.set_classes = _mock_set_classes  # type: ignore[attr-defined]
+            augmentor = DatasetVideoAugmentor(
+                detector=mock_det,
+                mode="bbox",
+                target_objects="tray, cube, bottle",
+            )
 
             out_path = augmentor.augment(
                 input_repo=source_repo,
@@ -43,11 +96,19 @@ class TestDatasetAugment(unittest.TestCase):
                 output_dir=out_dir,
                 overwrite=True,
                 max_episodes=1,
+                target_from_prompt=True,
             )
 
             self.assertTrue(out_path.exists())
             self.assertTrue((out_path / "meta" / "info.json").exists())
-            self.assertTrue((out_path / "meta" / "lerobot_vision_detections.json").exists())
+            ann_path = out_path / "meta" / "lerobot_vision_detections.json"
+            self.assertTrue(ann_path.exists())
+
+            ann_data = json.loads(ann_path.read_text(encoding="utf-8"))
+            self.assertTrue(ann_data["target_from_prompt"])
+            ep0_targets = ann_data["episodes"]["0"]["target_objects"]
+            self.assertEqual(len(ep0_targets), 1)
+            self.assertEqual(recorded_classes, [ep0_targets])
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 

@@ -136,6 +136,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Keyframe detection stride (e.g. --stride 2 or --stride 3 speeds up inference 2-3x by propagating masks).",
     )
     parser.add_argument(
+        "--target_from_prompt",
+        action="store_true",
+        help="Dynamically extract a single target object per episode from its task prompt matching --target_objects.",
+    )
+    parser.add_argument(
         "--max_episodes",
         type=int,
         default=None,
@@ -180,6 +185,7 @@ def main() -> None:
         batch_size=args.batch_size,
         stride=args.stride,
         max_episodes=args.max_episodes,
+        target_from_prompt=args.target_from_prompt,
     )
 
     logger.info(f"Augmentation pipeline finished successfully! Dataset saved at: {out_path}")

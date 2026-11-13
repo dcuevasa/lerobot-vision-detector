@@ -68,6 +68,97 @@ def match_camera_key(video_key: str, specified_cameras: set[str]) -> bool:
     return False
 
 
+def parse_target_list(target_objects: str | Sequence[str] | None) -> list[str]:
+    """Parse a comma-separated string or sequence of target labels into clean strings."""
+    if not target_objects:
+        return []
+    if isinstance(target_objects, str):
+        raw_items = target_objects.split(",")
+    else:
+        raw_items = [str(item) for item in target_objects]
+
+    seen: set[str] = set()
+    parsed: list[str] = []
+    for item in raw_items:
+        clean = item.strip()
+        if not clean:
+            continue
+        key = clean.lower()
+        if key not in seen:
+            seen.add(key)
+            parsed.append(clean)
+    return parsed
+
+
+def extract_target_from_prompt(
+    task_prompt: str,
+    candidate_targets: str | Sequence[str] | None,
+) -> str | None:
+    """Extract a single target object matching `task_prompt` from `candidate_targets`.
+
+    Matches whole words/phrases case-insensitively. When multiple candidates match,
+    the earliest mention in `task_prompt` (with longer phrase winning ties) is returned.
+    """
+    candidates = parse_target_list(candidate_targets)
+    if not task_prompt or not candidates:
+        return None
+
+    best_match: tuple[int, int, str] | None = None
+    for cand in candidates:
+        # Match whitespace-normalized multi-word or single-word boundaries.
+        parts = cand.split()
+        pattern_body = r"\s+".join(re.escape(p) for p in parts)
+        pattern = re.compile(rf"(?<!\w){pattern_body}(?!\w)", flags=re.IGNORECASE)
+        m = pattern.search(task_prompt)
+        if m is not None:
+            score = (m.start(), -len(cand))
+            if best_match is None or score < (best_match[0], best_match[1]):
+                best_match = (score[0], score[1], cand)
+
+    return best_match[2] if best_match is not None else None
+
+
+def _lookup_task_by_index(tasks_meta: Any, t_idx: int) -> str | None:
+    """Resolve an integer `task_index` from `src_ds.meta.tasks`."""
+    if tasks_meta is None:
+        return None
+    if hasattr(tasks_meta, "columns") and "task_index" in tasks_meta.columns:
+        matched = tasks_meta[tasks_meta["task_index"] == t_idx]
+        if len(matched) > 0:
+            return str(matched.index[0])
+    if hasattr(tasks_meta, "index") and 0 <= t_idx < len(tasks_meta.index):
+        return str(tasks_meta.index[t_idx])
+    return None
+
+
+def _resolve_episode_task(src_ds: Any, ep_meta: dict[str, Any], hf_slice: Any) -> str:
+    """Resolve the natural-language task prompt for an episode."""
+    if "tasks" in ep_meta and ep_meta["tasks"]:
+        ep_tasks = ep_meta["tasks"]
+        first_task = ep_tasks[0] if isinstance(ep_tasks, (list, tuple)) else ep_tasks
+        if first_task:
+            return str(first_task)
+
+    num_rows = len(hf_slice) if hf_slice is not None else 0
+    if num_rows > 0 and hasattr(hf_slice, "column_names"):
+        if "task" in hf_slice.column_names and hf_slice[0]["task"]:
+            return str(hf_slice[0]["task"])
+        if "task_index" in hf_slice.column_names and hasattr(src_ds.meta, "tasks"):
+            t_idx = int(hf_slice[0]["task_index"])
+            resolved = _lookup_task_by_index(src_ds.meta.tasks, t_idx)
+            if resolved is not None:
+                return resolved
+
+    if hasattr(src_ds.meta, "tasks") and src_ds.meta.tasks is not None:
+        if hasattr(src_ds.meta.tasks, "index") and len(src_ds.meta.tasks) > 0:
+            return str(src_ds.meta.tasks.index[0])
+        if isinstance(src_ds.meta.tasks, dict) and src_ds.meta.tasks:
+            return str(list(src_ds.meta.tasks.keys())[0])
+    if hasattr(src_ds.meta, "task") and src_ds.meta.task:
+        return str(src_ds.meta.task)
+    return "default_task"
+
+
 class DatasetVideoAugmentor:
     """Processes existing LeRobot datasets to render spatial detections onto video frames."""
 
@@ -119,6 +210,7 @@ class DatasetVideoAugmentor:
         batch_size: int = 16,
         stride: int = 1,
         max_episodes: int | None = None,
+        target_from_prompt: bool = False,
     ) -> Path:
         """Run detection pipeline on the specified cameras of an input dataset.
 
@@ -260,6 +352,26 @@ class DatasetVideoAugmentor:
 
             # Select tabular data
             hf_slice = src_ds.hf_dataset.select(range(ep_from_idx, ep_to_idx))
+            task_str = _resolve_episode_task(src_ds, ep_meta, hf_slice)
+
+            active_targets: str | Sequence[str] | None = self.target_objects
+            if target_from_prompt:
+                extracted_target = extract_target_from_prompt(task_str, self.target_objects)
+                if extracted_target is not None:
+                    active_targets = [extracted_target]
+                    logger.info(
+                        f"Episode {ep_idx}: extracted target '{extracted_target}' from task '{task_str}'"
+                    )
+                else:
+                    logger.warning(
+                        f"Episode {ep_idx}: no candidate in {self.target_objects} matched task "
+                        f"'{task_str}'. Falling back to all candidate targets."
+                    )
+                if hasattr(self.detector, "set_classes") and active_targets is not None:
+                    try:
+                        self.detector.set_classes(active_targets)
+                    except NotImplementedError:
+                        pass
 
             # Decode video frames for each video key
             decoded_videos: dict[str, np.ndarray] = {}
@@ -317,7 +429,7 @@ class DatasetVideoAugmentor:
                         image=raw_frames[idx],
                         result=det_res,
                         mode=self.mode,
-                        target_objects=self.target_objects,
+                        target_objects=active_targets,
                         conf_threshold=self.conf_threshold,
                         mask_alpha=self.mask_alpha,
                         box_thickness=self.box_thickness,
@@ -325,7 +437,7 @@ class DatasetVideoAugmentor:
                     annotated_frames[idx] = annotated
 
                     # Log detection atom for visualizer if matches target
-                    filtered = det_res.filter_by_targets(self.target_objects, self.conf_threshold)
+                    filtered = det_res.filter_by_targets(active_targets, self.conf_threshold)
                     if not filtered.is_empty:
                         for det in filtered.detections:
                             ep_box_atoms.append({
@@ -342,19 +454,6 @@ class DatasetVideoAugmentor:
 
             # Unspecified cameras in passthrough_video_keys remain unmodified!
 
-            # Build task string lookup
-            task_str = "default_task"
-            if hasattr(src_ds.meta, "tasks") and src_ds.meta.tasks is not None:
-                if hasattr(src_ds.meta.tasks, "index") and len(src_ds.meta.tasks) > 0:
-                    task_str = str(src_ds.meta.tasks.index[0])
-                elif isinstance(src_ds.meta.tasks, dict) and src_ds.meta.tasks:
-                    task_str = str(list(src_ds.meta.tasks.keys())[0])
-            elif hasattr(src_ds.meta, "task") and src_ds.meta.task:
-                task_str = str(src_ds.meta.task)
-            elif "tasks" in ep_meta:
-                ep_tasks = ep_meta["tasks"]
-                task_str = str(ep_tasks[0] if isinstance(ep_tasks, list) else ep_tasks)
-
             # Write frames into new dataset
             for i in range(num_frames):
                 frame_dict = {}
@@ -368,16 +467,22 @@ class DatasetVideoAugmentor:
                 current_task = task_str
                 if "task" in hf_slice.column_names and hf_slice[i]["task"]:
                     current_task = str(hf_slice[i]["task"])
-                elif "task_index" in hf_slice.column_names and hasattr(src_ds.meta, "tasks") and hasattr(src_ds.meta.tasks, "index"):
-                    t_idx = int(hf_slice[i]["task_index"])
-                    if 0 <= t_idx < len(src_ds.meta.tasks.index):
-                        current_task = str(src_ds.meta.tasks.index[t_idx])
+                elif "task_index" in hf_slice.column_names and hasattr(src_ds.meta, "tasks"):
+                    resolved = _lookup_task_by_index(src_ds.meta.tasks, int(hf_slice[i]["task_index"]))
+                    if resolved is not None:
+                        current_task = resolved
 
                 frame_dict["task"] = current_task
                 new_ds.add_frame(frame_dict)
 
             new_ds.save_episode()
-            annotated_events[str(ep_idx)] = {"detections": ep_box_atoms}
+            annotated_events[str(ep_idx)] = {
+                "task": task_str,
+                "target_objects": list(active_targets)
+                if isinstance(active_targets, (list, tuple))
+                else active_targets,
+                "detections": ep_box_atoms,
+            }
 
         # 7. Finalize dataset
         logger.info("Finalizing new LeRobotDataset...")
@@ -392,6 +497,7 @@ class DatasetVideoAugmentor:
                 {
                     "source_dataset": input_repo,
                     "target_objects": self.target_objects,
+                    "target_from_prompt": target_from_prompt,
                     "mode": self.mode,
                     "processed_cameras": process_video_keys,
                     "unprocessed_cameras": passthrough_video_keys,
@@ -437,7 +543,9 @@ def augment_dataset(
     hf_token: str | None = None,
     overwrite: bool = False,
     batch_size: int = 16,
+    stride: int = 1,
     max_episodes: int | None = None,
+    target_from_prompt: bool = False,
     **kwargs: Any,
 ) -> Path:
     """Convenience functional API for augmenting a LeRobot dataset."""
@@ -459,5 +567,7 @@ def augment_dataset(
         hf_token=hf_token,
         overwrite=overwrite,
         batch_size=batch_size,
+        stride=stride,
         max_episodes=max_episodes,
+        target_from_prompt=target_from_prompt,
     )
