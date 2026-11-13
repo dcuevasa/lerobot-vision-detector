@@ -112,6 +112,52 @@ class TestDatasetAugment(unittest.TestCase):
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
+    def test_offline_augment_obscure_with_prompt_and_distractor(self):
+        source_repo = "bendca61/mujoco-so101-cube_on_tray-mouse-v1"
+        output_repo = "local/test_unittest_obscure_robot"
+
+        tmp_dir = Path(tempfile.mkdtemp())
+        try:
+            out_dir = tmp_dir / "augmented_dataset_obscure"
+            mock_det = make_detector("mock", mode="obscure", default_class="cube")
+            recorded_classes: list[list[str]] = []
+
+            def _mock_set_classes(classes):
+                recorded_classes.append(list(classes))
+                mock_det.default_class = str(classes[0])
+
+            mock_det.set_classes = _mock_set_classes  # type: ignore[attr-defined]
+            augmentor = DatasetVideoAugmentor(
+                detector=mock_det,
+                mode="obscure",
+                target_objects="tray, cube, bottle",
+                distractor_objects="robot",
+            )
+
+            out_path = augmentor.augment(
+                input_repo=source_repo,
+                output_repo=output_repo,
+                cameras="realsense",
+                output_dir=out_dir,
+                overwrite=True,
+                max_episodes=1,
+                target_from_prompt=True,
+            )
+
+            ann_path = out_path / "meta" / "lerobot_vision_detections.json"
+            ann_data = json.loads(ann_path.read_text(encoding="utf-8"))
+            self.assertTrue(ann_data["target_from_prompt"])
+            self.assertEqual(ann_data["distractor_objects"], ["robot"])
+            self.assertEqual(ann_data["obscure_color"], [255, 255, 255])
+            ep0_targets = ann_data["episodes"]["0"]["target_objects"]
+            self.assertEqual(len(ep0_targets), 1)
+            # Detector queried BOTH target + 'robot' distractor on ep0, while only target is logged
+            self.assertEqual(recorded_classes[-1], [*ep0_targets, "robot"])
+            logged_classes = {d["class_name"] for d in ann_data["episodes"]["0"]["detections"]}
+            self.assertNotIn("robot", logged_classes)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

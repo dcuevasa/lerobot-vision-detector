@@ -46,6 +46,7 @@ class VisionEvalDetectorConfig:
     device: str | None = None
     obscure_color: str = "255,255,255"
     obscure_margin: int = 16
+    distractor_objects: str | None = None
 
 
 @dataclass
@@ -92,6 +93,7 @@ def eval_policy(cfg: DetectedEvalConfig) -> None:
             device=cfg.detector.device,
             obscure_color=cfg.detector.obscure_color,
             obscure_margin=cfg.detector.obscure_margin,
+            distractor_objects=cfg.detector.distractor_objects,
         )
 
     # 3. Load Policy and Processors

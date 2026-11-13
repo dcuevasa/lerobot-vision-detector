@@ -55,6 +55,17 @@ class TestDetectors(unittest.TestCase):
         all_res = res.filter_by_targets(target_objects="all")
         self.assertEqual(len(all_res.detections), 2)
 
+        # Exclude robot distractor even when target_objects="all" or None
+        robot_det = Detection(
+            class_name="robot",
+            class_id=2,
+            confidence=0.95,
+            box=Box(30, 30, 60, 60, 0.95, 2, "robot"),
+        )
+        res_with_robot = DetectionResult(detections=[det1, det2, robot_det], image_shape=(100, 100, 3))
+        no_robot = res_with_robot.filter_by_targets(target_objects="all", exclude_objects="robot")
+        self.assertEqual([d.class_name for d in no_robot.detections], ["cup", "bottle"])
+
     def test_mock_detector_bbox_and_seg(self):
         img = np.zeros((240, 320, 3), dtype=np.uint8)
 

@@ -38,6 +38,7 @@ class DetectedCameraWrapper(Camera):
         box_thickness: int = 2,
         obscure_color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
         obscure_margin: int = 16,
+        exclude_objects: str | Sequence[str] | None = None,
         detector_type: str = "yolo",
         model_name: str | None = None,
         device: str | None = None,
@@ -63,6 +64,7 @@ class DetectedCameraWrapper(Camera):
         self.box_thickness = box_thickness
         self.obscure_color = obscure_color
         self.obscure_margin = obscure_margin
+        self.exclude_objects = exclude_objects
 
         super().__init__(dummy_config)
 
@@ -146,6 +148,7 @@ class DetectedCameraWrapper(Camera):
                 box_thickness=self.box_thickness,
                 obscure_color=self.obscure_color,
                 obscure_margin=self.obscure_margin,
+                exclude_objects=self.exclude_objects,
             )
             self.latest_annotated_frame = annotated
             return annotated

@@ -6,7 +6,7 @@ import logging
 from typing import Any, Mapping, Sequence
 from lerobot.cameras.camera import Camera
 
-from ..detectors.base import BaseDetector
+from ..detectors.base import BaseDetector, merge_query_classes, parse_class_names
 from ..detectors import make_detector
 from .camera_wrapper import DetectedCameraWrapper
 
@@ -34,6 +34,7 @@ class MultiCameraVisionWrapper:
         box_thickness: int = 2,
         obscure_color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
         obscure_margin: int = 16,
+        distractor_objects: str | Sequence[str] | None = None,
         detector_type: str = "yolo",
         **kwargs: Any,
     ):
@@ -45,6 +46,7 @@ class MultiCameraVisionWrapper:
         self.box_thickness = box_thickness
         self.obscure_color = obscure_color
         self.obscure_margin = obscure_margin
+        self.distractor_objects = parse_class_names(distractor_objects)
 
         # Normalize specified camera keys
         if camera_keys is None or camera_keys == "all":
@@ -54,19 +56,35 @@ class MultiCameraVisionWrapper:
         else:
             self.specified_keys = {str(k).strip() for k in camera_keys if str(k).strip()}
 
+        query_targets: str | Sequence[str] | None = target_objects
+        if self.distractor_objects:
+            merged = merge_query_classes(target_objects, self.distractor_objects)
+            if merged:
+                query_targets = merged
+
         # Instantiate shared detector if none provided
         if detector is None:
             self.detector: BaseDetector = make_detector(
                 detector_type=detector_type,
                 model_name=model_name,
                 mode=mode,
-                target_objects=target_objects,
+                target_objects=query_targets,
                 conf_threshold=conf_threshold,
                 device=device,
                 **kwargs,
             )
         else:
             self.detector = detector
+            if (
+                self.distractor_objects
+                and isinstance(query_targets, list)
+                and query_targets
+                and hasattr(self.detector, "set_classes")
+            ):
+                try:
+                    self.detector.set_classes(query_targets)
+                except NotImplementedError:
+                    pass
 
         self.wrapped_cameras: dict[str, Camera] = {}
         for cam_key, cam_obj in cameras.items():
@@ -89,6 +107,7 @@ class MultiCameraVisionWrapper:
                     box_thickness=box_thickness,
                     obscure_color=obscure_color,
                     obscure_margin=obscure_margin,
+                    exclude_objects=self.distractor_objects or None,
                 )
             else:
                 logger.info(f"Camera '{cam_key}' is UNSPECIFIED. Keeping raw camera stream untouched.")
@@ -104,6 +123,13 @@ class MultiCameraVisionWrapper:
         for cam in self.wrapped_cameras.values():
             if isinstance(cam, DetectedCameraWrapper):
                 cam.target_objects = target_objects
+        if hasattr(self.detector, "set_classes"):
+            query_classes = merge_query_classes(target_objects, self.distractor_objects)
+            if query_classes:
+                try:
+                    self.detector.set_classes(query_classes)
+                except NotImplementedError:
+                    pass
 
     def set_mode(self, mode: str) -> None:
         """Update detection mode ('bbox', 'seg', 'both') dynamically across all wrapped cameras."""

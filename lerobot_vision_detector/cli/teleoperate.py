@@ -80,6 +80,9 @@ def teleoperate(cfg: DetectedTeleoperateConfig) -> None:
             device=cfg.detector.device,
             sam_version=cfg.detector.sam_version,
             text_threshold=cfg.detector.text_threshold,
+            obscure_color=cfg.detector.obscure_color,
+            obscure_margin=cfg.detector.obscure_margin,
+            distractor_objects=cfg.detector.distractor_objects,
         )
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()

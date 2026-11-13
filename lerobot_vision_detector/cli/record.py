@@ -64,6 +64,7 @@ class VisionDetectorConfig:
     device: str | None = None
     obscure_color: str = "255,255,255"
     obscure_margin: int = 16
+    distractor_objects: str | None = None
 
 
 @dataclass
@@ -220,6 +221,7 @@ def record(cfg: DetectedRecordConfig) -> LeRobotDataset:
             text_threshold=cfg.detector.text_threshold,
             obscure_color=cfg.detector.obscure_color,
             obscure_margin=cfg.detector.obscure_margin,
+            distractor_objects=cfg.detector.distractor_objects,
         )
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()

@@ -25,7 +25,13 @@ from tqdm import tqdm
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.video_utils import decode_video_frames
 
-from ..detectors.base import OBSCURE_MODES, BaseDetector, DetectionResult
+from ..detectors.base import (
+    OBSCURE_MODES,
+    BaseDetector,
+    DetectionResult,
+    merge_query_classes,
+    parse_class_names,
+)
 from ..detectors import make_detector
 from ..utils.drawing import parse_rgb_color
 
@@ -71,24 +77,7 @@ def match_camera_key(video_key: str, specified_cameras: set[str]) -> bool:
 
 def parse_target_list(target_objects: str | Sequence[str] | None) -> list[str]:
     """Parse a comma-separated string or sequence of target labels into clean strings."""
-    if not target_objects:
-        return []
-    if isinstance(target_objects, str):
-        raw_items = target_objects.split(",")
-    else:
-        raw_items = [str(item) for item in target_objects]
-
-    seen: set[str] = set()
-    parsed: list[str] = []
-    for item in raw_items:
-        clean = item.strip()
-        if not clean:
-            continue
-        key = clean.lower()
-        if key not in seen:
-            seen.add(key)
-            parsed.append(clean)
-    return parsed
+    return parse_class_names(target_objects)
 
 
 def extract_target_from_prompt(
@@ -177,6 +166,7 @@ class DatasetVideoAugmentor:
         box_thickness: int = 2,
         obscure_color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
         obscure_margin: int = 16,
+        distractor_objects: str | Sequence[str] | None = None,
         **kwargs: Any,
     ):
         self.mode = mode
@@ -186,13 +176,20 @@ class DatasetVideoAugmentor:
         self.box_thickness = box_thickness
         self.obscure_color = parse_rgb_color(obscure_color)
         self.obscure_margin = max(1, int(obscure_margin))
+        self.distractor_objects = parse_class_names(distractor_objects)
+
+        initial_query_targets: str | Sequence[str] | None = target_objects
+        if self.distractor_objects:
+            merged_init = merge_query_classes(target_objects, self.distractor_objects)
+            if merged_init:
+                initial_query_targets = merged_init
 
         if detector is None:
             self.detector: BaseDetector = make_detector(
                 detector_type=detector_type,
                 model_name=model_name,
                 mode=mode,
-                target_objects=target_objects,
+                target_objects=initial_query_targets,
                 conf_threshold=conf_threshold,
                 device=device,
                 half=half,
@@ -200,6 +197,16 @@ class DatasetVideoAugmentor:
             )
         else:
             self.detector = detector
+            if (
+                self.distractor_objects
+                and isinstance(initial_query_targets, list)
+                and initial_query_targets
+                and hasattr(self.detector, "set_classes")
+            ):
+                try:
+                    self.detector.set_classes(initial_query_targets)
+                except NotImplementedError:
+                    pass
 
     def augment(
         self,
@@ -372,11 +379,13 @@ class DatasetVideoAugmentor:
                         f"Episode {ep_idx}: no candidate in {self.target_objects} matched task "
                         f"'{task_str}'. Falling back to all candidate targets."
                     )
-                if hasattr(self.detector, "set_classes") and active_targets is not None:
-                    try:
-                        self.detector.set_classes(active_targets)
-                    except NotImplementedError:
-                        pass
+                if hasattr(self.detector, "set_classes"):
+                    query_classes = merge_query_classes(active_targets, self.distractor_objects)
+                    if query_classes:
+                        try:
+                            self.detector.set_classes(query_classes)
+                        except NotImplementedError:
+                            pass
 
             # Decode video frames for each video key
             decoded_videos: dict[str, np.ndarray] = {}
@@ -440,11 +449,16 @@ class DatasetVideoAugmentor:
                         box_thickness=self.box_thickness,
                         obscure_color=self.obscure_color,
                         obscure_margin=self.obscure_margin,
+                        exclude_objects=self.distractor_objects or None,
                     )
                     annotated_frames[idx] = annotated
 
-                    # Log detection atom for visualizer if matches target
-                    filtered = det_res.filter_by_targets(active_targets, self.conf_threshold)
+                    # Log detection atom for visualizer if matches target (excluding distractors)
+                    filtered = det_res.filter_by_targets(
+                        active_targets,
+                        self.conf_threshold,
+                        exclude_objects=self.distractor_objects or None,
+                    )
                     if not filtered.is_empty:
                         for det in filtered.detections:
                             ep_box_atoms.append({
@@ -504,6 +518,7 @@ class DatasetVideoAugmentor:
                 {
                     "source_dataset": input_repo,
                     "target_objects": self.target_objects,
+                    "distractor_objects": self.distractor_objects or None,
                     "target_from_prompt": target_from_prompt,
                     "mode": self.mode,
                     "obscure_color": list(self.obscure_color) if self.mode.lower() in OBSCURE_MODES else None,
@@ -557,6 +572,7 @@ def augment_dataset(
     target_from_prompt: bool = False,
     obscure_color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
     obscure_margin: int = 16,
+    distractor_objects: str | Sequence[str] | None = None,
     **kwargs: Any,
 ) -> Path:
     """Convenience functional API for augmenting a LeRobot dataset."""
@@ -568,6 +584,7 @@ def augment_dataset(
         device=device,
         obscure_color=obscure_color,
         obscure_margin=obscure_margin,
+        distractor_objects=distractor_objects,
         **kwargs,
     )
     return augmentor.augment(

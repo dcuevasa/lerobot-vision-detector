@@ -90,6 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Target object class name(s) comma-separated (e.g. 'cup' or 'cup,bottle'). Defaults to all detected objects.",
     )
     parser.add_argument(
+        "--distractor_objects",
+        type=str,
+        default=None,
+        help="Optional comma-separated class(es) (e.g. 'robot') queried by the detector for disambiguation without rendering masks/boxes or logging them.",
+    )
+    parser.add_argument(
         "--model_name",
         type=str,
         default=None,
@@ -185,6 +191,7 @@ def main() -> None:
         text_threshold=args.text_threshold,
         obscure_color=args.obscure_color,
         obscure_margin=args.obscure_margin,
+        distractor_objects=args.distractor_objects,
     )
 
     out_path = augmentor.augment(

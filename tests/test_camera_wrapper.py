@@ -120,6 +120,54 @@ class TestCameraWrapper(unittest.TestCase):
         self.assertIsInstance(robot.cameras["cam_high"], DetectedCameraWrapper)
         self.assertNotIsInstance(robot.cameras["cam_wrist"], DetectedCameraWrapper)
 
+    def test_multi_camera_wrapper_obscure_with_distractor(self):
+        from lerobot_vision_detector.detectors.base import Box, Detection, DetectionResult, Mask
+
+        class DualMockDetector:
+            def __init__(self):
+                self.classes = []
+                self.mode = "obscure"
+                self.target_objects = None
+                self.conf_threshold = 0.25
+
+            def set_classes(self, classes):
+                self.classes = list(classes)
+
+            def predict(self, image):
+                h, w = image.shape[:2]
+                m_target = np.zeros((h, w), dtype=bool)
+                m_target[20:60, 20:60] = True
+                m_robot = np.zeros((h, w), dtype=bool)
+                m_robot[100:150, 100:150] = True
+                return DetectionResult(
+                    detections=[
+                        Detection("cup", 0, 0.9, Box(20, 20, 60, 60, 0.9, 0, "cup"), Mask(m_target, 0.9, 0, "cup")),
+                        Detection("robot", 1, 0.95, Box(100, 100, 150, 150, 0.95, 1, "robot"), Mask(m_robot, 0.95, 1, "robot")),
+                    ],
+                    image_shape=image.shape,
+                )
+
+            def annotate(self, *args, **kwargs):
+                # Delegate to BaseDetector.annotate implementation via MockDetector helper
+                helper = make_detector("mock", mode="obscure")
+                return helper.annotate(*args, **kwargs)
+
+        det = DualMockDetector()
+        cams = {"cam_high": DummyCamera()}
+        wrapper = MultiCameraVisionWrapper(
+            cameras=cams,
+            camera_keys=["cam_high"],
+            detector=det,  # type: ignore[arg-type]
+            mode="obscure",
+            target_objects="cup",
+            distractor_objects="robot",
+        )
+        self.assertEqual(det.classes, ["cup", "robot"])
+        frame = wrapper.get_cameras()["cam_high"].read()
+        # Cup masked in solid pure white; robot region stays dark background (untouched by mask)
+        self.assertTrue(np.all(frame[20:60, 20:60] == (255, 255, 255)))
+        self.assertTrue(np.all(frame[100:150, 100:150] == (0, 0, 0)))
+
 
 if __name__ == "__main__":
     unittest.main()

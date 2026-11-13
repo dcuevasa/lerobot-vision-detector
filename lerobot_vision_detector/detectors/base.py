@@ -18,6 +18,45 @@ from ..utils.drawing import (
 OBSCURE_MODES = ("obscure", "obscure_mask", "obscuring_mask")
 
 
+def parse_class_names(classes: str | Sequence[str] | None) -> list[str]:
+    """Parse a comma-separated string or sequence of class names into deduplicated strings."""
+    if not classes:
+        return []
+    raw_items = classes.split(",") if isinstance(classes, str) else [str(item) for item in classes]
+
+    seen: set[str] = set()
+    parsed: list[str] = []
+    for item in raw_items:
+        clean = item.strip()
+        if not clean:
+            continue
+        key = clean.lower()
+        if key not in seen:
+            seen.add(key)
+            parsed.append(clean)
+    return parsed
+
+
+def merge_query_classes(
+    target_classes: str | Sequence[str] | None,
+    distractor_classes: str | Sequence[str] | None = None,
+) -> list[str]:
+    """Combine target and unrendered distractor classes into one deduplicated query list.
+
+    Wildcards ('all', '*') are omitted because open-vocabulary models need explicit words.
+    """
+    targets = [t for t in parse_class_names(target_classes) if t.lower() not in ("all", "*")]
+    distractors = parse_class_names(distractor_classes)
+    merged: list[str] = []
+    seen: set[str] = set()
+    for name in [*targets, *distractors]:
+        key = name.lower()
+        if key not in seen:
+            seen.add(key)
+            merged.append(name)
+    return merged
+
+
 @dataclass
 class Box:
     """Bounding box representation in pixel coordinates."""
@@ -81,30 +120,31 @@ class DetectionResult:
         self,
         target_objects: str | Sequence[str] | None = None,
         conf_threshold: float = 0.0,
+        exclude_objects: str | Sequence[str] | None = None,
     ) -> DetectionResult:
-        """Filter detections by target class names and confidence threshold."""
-        if not target_objects and conf_threshold <= 0.0:
+        """Filter detections by target class names, confidence threshold, and excluded classes."""
+        excluded = {e.lower() for e in parse_class_names(exclude_objects)}
+        if not target_objects and not excluded and conf_threshold <= 0.0:
             return self
 
         targets: set[str] | None = None
         if target_objects:
-            if isinstance(target_objects, str):
-                raw_targets = [t.strip().lower() for t in target_objects.split(",") if t.strip()]
-            else:
-                raw_targets = [str(t).strip().lower() for t in target_objects if str(t).strip()]
+            raw_targets = [t.lower() for t in parse_class_names(target_objects)]
             if "all" in raw_targets or "*" in raw_targets:
                 targets = None
-            else:
+            elif raw_targets:
                 targets = set(raw_targets)
 
         filtered = []
         for det in self.detections:
             if det.confidence < conf_threshold:
                 continue
+            c_name = det.class_name.lower()
+            c_id_str = str(det.class_id)
+            if excluded and (c_name in excluded or c_id_str in excluded):
+                continue
             if targets is not None:
-                c_name = det.class_name.lower()
-                c_id_str = str(det.class_id)
-                if c_name not in targets and c_id_str not in targets and not any(t == c_name or t == c_id_str for t in targets):
+                if c_name not in targets and c_id_str not in targets:
                     continue
             filtered.append(det)
 
@@ -126,6 +166,7 @@ class BaseDetector(ABC):
         device: str | None = None,
         obscure_color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
         obscure_margin: int = 16,
+        exclude_objects: str | Sequence[str] | None = None,
     ):
         self.mode = mode.lower()
         self.target_objects = target_objects
@@ -133,6 +174,7 @@ class BaseDetector(ABC):
         self.device = device
         self.obscure_color = parse_rgb_color(obscure_color)
         self.obscure_margin = max(1, int(obscure_margin))
+        self.exclude_objects = exclude_objects
 
     @abstractmethod
     def predict(self, image: np.ndarray) -> DetectionResult:
@@ -157,6 +199,7 @@ class BaseDetector(ABC):
         box_thickness: int = 2,
         obscure_color: tuple[int, int, int] | Sequence[int] | str | None = None,
         obscure_margin: int | None = None,
+        exclude_objects: str | Sequence[str] | None = None,
     ) -> np.ndarray:
         """Render detections onto the input image array.
 
@@ -173,6 +216,7 @@ class BaseDetector(ABC):
             box_thickness: Bounding box line thickness.
             obscure_color: Solid reserved RGB color used when mode is 'obscure'.
             obscure_margin: Minimum L_inf distance from obscure_color for background pixels.
+            exclude_objects: Distractor classes detected for disambiguation but excluded from visual output.
 
         Returns:
             Annotated RGB numpy image array.
@@ -180,11 +224,18 @@ class BaseDetector(ABC):
         active_mode = (mode or self.mode).lower()
         active_targets = target_objects if target_objects is not None else self.target_objects
         active_conf = conf_threshold if conf_threshold is not None else self.conf_threshold
+        active_excludes = (
+            exclude_objects if exclude_objects is not None else getattr(self, "exclude_objects", None)
+        )
 
         if result is None:
             result = self.predict(image)
 
-        filtered = result.filter_by_targets(active_targets, active_conf)
+        filtered = result.filter_by_targets(
+            active_targets,
+            active_conf,
+            exclude_objects=active_excludes,
+        )
 
         # Obscuring mask mode: reserve solid color across palette and anonymize targets
         if active_mode in OBSCURE_MODES:
