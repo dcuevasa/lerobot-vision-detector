@@ -67,9 +67,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["bbox", "seg", "both"],
+        choices=["bbox", "seg", "both", "obscure"],
         default="bbox",
-        help="Detection modality: 'bbox' (2D bounding box), 'seg' (instance mask), or 'both'. Default: bbox.",
+        help="Detection modality: 'bbox' (2D bounding box), 'seg' (instance mask), 'both', or 'obscure' (solid reserved-color anonymization mask). Default: bbox.",
+    )
+    parser.add_argument(
+        "--obscure_color",
+        type=str,
+        default="255,255,255",
+        help="Reserved RGB color for --mode obscure (e.g. '255,255,255', 'white', '#ffffff'). Default: 255,255,255.",
+    )
+    parser.add_argument(
+        "--obscure_margin",
+        type=int,
+        default=16,
+        help="Minimum per-channel guard margin keeping non-masked pixels away from --obscure_color (default: 16).",
     )
     parser.add_argument(
         "--target_objects",
@@ -171,6 +183,8 @@ def main() -> None:
         device=args.device,
         sam_version=args.sam_version,
         text_threshold=args.text_threshold,
+        obscure_color=args.obscure_color,
+        obscure_margin=args.obscure_margin,
     )
 
     out_path = augmentor.augment(

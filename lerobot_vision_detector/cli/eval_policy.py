@@ -38,12 +38,14 @@ logger = logging.getLogger("lerobot_vision_eval")
 @dataclass
 class VisionEvalDetectorConfig:
     enabled: bool = True
-    mode: str = "bbox"  # "bbox", "seg", or "both"
+    mode: str = "bbox"  # "bbox", "seg", "both", or "obscure"
     cameras: str = "all"  # Comma-separated cameras to process, or 'all'
     target_objects: str | None = None  # Comma-separated target objects
     model_name: str | None = None  # e.g. 'yolov8n.pt' or 'yolov8n-seg.pt'
     conf_threshold: float = 0.25
     device: str | None = None
+    obscure_color: str = "255,255,255"
+    obscure_margin: int = 16
 
 
 @dataclass
@@ -88,6 +90,8 @@ def eval_policy(cfg: DetectedEvalConfig) -> None:
             conf_threshold=cfg.detector.conf_threshold,
             model_name=cfg.detector.model_name,
             device=cfg.detector.device,
+            obscure_color=cfg.detector.obscure_color,
+            obscure_margin=cfg.detector.obscure_margin,
         )
 
     # 3. Load Policy and Processors

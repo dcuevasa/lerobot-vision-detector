@@ -164,3 +164,123 @@ def draw_segmentation_mask(
         cv2.drawContours(img, contours, -1, color, contour_thickness, cv2.LINE_AA)
 
     return img
+
+
+_NAMED_RGB_COLORS: dict[str, tuple[int, int, int]] = {
+    "white": (255, 255, 255),
+    "black": (0, 0, 0),
+    "red": (255, 0, 0),
+    "green": (0, 255, 0),
+    "blue": (0, 0, 255),
+    "yellow": (255, 255, 0),
+    "magenta": (255, 0, 255),
+    "cyan": (0, 255, 255),
+}
+
+
+def parse_rgb_color(
+    color: tuple[int, int, int] | Sequence[int] | str | None,
+    default: tuple[int, int, int] = (255, 255, 255),
+) -> tuple[int, int, int]:
+    """Parse an RGB color specification (tuple, sequence, name, hex, or 'R,G,B') cleanly."""
+    if color is None:
+        return default
+    if isinstance(color, str):
+        s = color.strip().lower()
+        if s in _NAMED_RGB_COLORS:
+            return _NAMED_RGB_COLORS[s]
+        if s.startswith("#") and len(s) == 7:
+            return (int(s[1:3], 16), int(s[3:5], 16), int(s[5:7], 16))
+        parts = [p.strip() for p in s.split(",") if p.strip()]
+        if len(parts) == 3:
+            return tuple(int(max(0, min(255, int(p)))) for p in parts)  # type: ignore[return-value]
+        raise ValueError(f"Invalid RGB color string '{color}'. Expected 'R,G,B', '#RRGGBB', or color name.")
+    vals = list(color)
+    if len(vals) != 3:
+        raise ValueError(f"Expected 3 RGB channels, got {len(vals)}: {color}")
+    return tuple(int(max(0, min(255, int(v)))) for v in vals)  # type: ignore[return-value]
+
+
+def _normalize_mask_bool(mask: np.ndarray, height: int, width: int) -> np.ndarray:
+    """Normalize a 2D/3D binary mask to a boolean (H, W) array matching frame shape."""
+    if mask.ndim == 3 and mask.shape[0] == 1:
+        mask = mask[0]
+    elif mask.ndim == 3 and mask.shape[-1] == 1:
+        mask = mask[..., 0]
+
+    if mask.shape[:2] != (height, width):
+        mask_uint8 = (mask > 0).astype(np.uint8) * 255
+        mask_uint8 = cv2.resize(mask_uint8, (width, height), interpolation=cv2.INTER_NEAREST)
+        return mask_uint8 > 0
+    return mask > 0
+
+
+def restrict_palette_color(
+    image: np.ndarray,
+    color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
+    margin: int = 16,
+) -> np.ndarray:
+    """Restrict an RGB image so no pixel equals or falls within `margin` (L_inf) of `color`.
+
+    For example, with ``color=(255, 255, 255)`` and ``margin=16``, every nearly-white
+    pixel (all channels >= 240) is clamped down to ``(239, 239, 239)`` so that pure white
+    is strictly reserved for obscuring object masks.
+    """
+    target = parse_rgb_color(color)
+    safe_margin = max(1, int(margin))
+    img = image.copy()
+
+    target_arr = np.array(target, dtype=np.int16)
+    diff = np.abs(img.astype(np.int16) - target_arr)
+    near_mask = np.all(diff < safe_margin, axis=-1)
+    if not np.any(near_mask):
+        return img
+
+    img_i16 = img[near_mask].astype(np.int16)
+    for ch in range(3):
+        c_val = int(target_arr[ch])
+        hi = c_val + safe_margin
+        lo = c_val - safe_margin
+        if hi > 255:
+            img_i16[:, ch] = lo
+        elif lo < 0:
+            img_i16[:, ch] = hi
+        else:
+            img_i16[:, ch] = np.where(img_i16[:, ch] >= c_val, hi, lo)
+
+    img[near_mask] = np.clip(img_i16, 0, 255).astype(np.uint8)
+    return img
+
+
+def draw_obscuring_mask(
+    image: np.ndarray,
+    masks: Sequence[np.ndarray] | np.ndarray,
+    color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
+    margin: int = 16,
+) -> np.ndarray:
+    """Anonymize detected objects with an opaque solid mask in a reserved color.
+
+    Restricts all non-masked pixels away from `color` by at least `margin` (L_inf),
+    then paints all masked object regions with the exact solid `color` (no blending,
+    contours, boxes, or text).
+    """
+    target = parse_rgb_color(color)
+    restricted = restrict_palette_color(image, color=target, margin=margin)
+    h, w = restricted.shape[:2]
+
+    if isinstance(masks, np.ndarray):
+        mask_list = [masks] if masks.ndim <= 2 or (masks.ndim == 3 and (masks.shape[0] == 1 or masks.shape[-1] == 1)) else list(masks)
+    else:
+        mask_list = list(masks)
+
+    if not mask_list:
+        return restricted
+
+    combined = np.zeros((h, w), dtype=bool)
+    for m in mask_list:
+        if m is not None:
+            combined |= _normalize_mask_bool(m, h, w)
+
+    if np.any(combined):
+        restricted[combined] = target
+    return restricted

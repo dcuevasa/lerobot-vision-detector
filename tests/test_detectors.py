@@ -68,6 +68,14 @@ class TestDetectors(unittest.TestCase):
         self.assertEqual(ann_seg.shape, img.shape)
         self.assertTrue(np.any(ann_seg > 0))
 
+        # Obscuring mask mode on bright white background: background must stay away from white,
+        # while the detected object silhouette is pure (255, 255, 255).
+        bright_img = np.full((240, 320, 3), 255, dtype=np.uint8)
+        det_obscure = MockDetector(mode="obscure", default_class="cup", mock_bbox=(50.0, 50.0, 120.0, 120.0))
+        ann_obscure = det_obscure.annotate(bright_img)
+        self.assertTrue(np.all(ann_obscure[50:120, 50:120] == (255, 255, 255)))
+        self.assertTrue(np.all(ann_obscure[0:40, 0:40] == (239, 239, 239)))
+
     def test_make_detector_factory(self):
         mock = make_detector("mock", mode="bbox", default_class="tape")
         self.assertIsInstance(mock, MockDetector)

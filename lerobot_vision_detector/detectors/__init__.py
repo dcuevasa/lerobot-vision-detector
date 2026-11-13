@@ -115,7 +115,11 @@ def make_detector(
 
     # Set default YOLO model if none provided
     if model_name is None:
-        model_name = "yolov8n-seg.pt" if mode in ("seg", "mask") else "yolov8n.pt"
+        model_name = (
+            "yolov8n-seg.pt"
+            if mode.lower() in ("seg", "mask", "obscure", "obscure_mask", "obscuring_mask")
+            else "yolov8n.pt"
+        )
 
     resolved_path = resolve_model_path(model_name)
 

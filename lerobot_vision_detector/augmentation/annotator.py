@@ -25,8 +25,9 @@ from tqdm import tqdm
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.video_utils import decode_video_frames
 
-from ..detectors.base import BaseDetector, DetectionResult
+from ..detectors.base import OBSCURE_MODES, BaseDetector, DetectionResult
 from ..detectors import make_detector
+from ..utils.drawing import parse_rgb_color
 
 logger = logging.getLogger("lerobot_vision_detector")
 
@@ -166,7 +167,7 @@ class DatasetVideoAugmentor:
         self,
         detector: BaseDetector | None = None,
         detector_type: str = "yolo",
-        mode: str = "bbox",  # "bbox", "seg", or "both"
+        mode: str = "bbox",  # "bbox", "seg", "both", or "obscure"
         target_objects: str | Sequence[str] | None = None,
         conf_threshold: float = 0.25,
         model_name: str | None = None,
@@ -174,6 +175,8 @@ class DatasetVideoAugmentor:
         half: bool = False,
         mask_alpha: float = 0.45,
         box_thickness: int = 2,
+        obscure_color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
+        obscure_margin: int = 16,
         **kwargs: Any,
     ):
         self.mode = mode
@@ -181,6 +184,8 @@ class DatasetVideoAugmentor:
         self.conf_threshold = conf_threshold
         self.mask_alpha = mask_alpha
         self.box_thickness = box_thickness
+        self.obscure_color = parse_rgb_color(obscure_color)
+        self.obscure_margin = max(1, int(obscure_margin))
 
         if detector is None:
             self.detector: BaseDetector = make_detector(
@@ -433,6 +438,8 @@ class DatasetVideoAugmentor:
                         conf_threshold=self.conf_threshold,
                         mask_alpha=self.mask_alpha,
                         box_thickness=self.box_thickness,
+                        obscure_color=self.obscure_color,
+                        obscure_margin=self.obscure_margin,
                     )
                     annotated_frames[idx] = annotated
 
@@ -499,6 +506,8 @@ class DatasetVideoAugmentor:
                     "target_objects": self.target_objects,
                     "target_from_prompt": target_from_prompt,
                     "mode": self.mode,
+                    "obscure_color": list(self.obscure_color) if self.mode.lower() in OBSCURE_MODES else None,
+                    "obscure_margin": self.obscure_margin if self.mode.lower() in OBSCURE_MODES else None,
                     "processed_cameras": process_video_keys,
                     "unprocessed_cameras": passthrough_video_keys,
                     "episodes": annotated_events,
@@ -546,6 +555,8 @@ def augment_dataset(
     stride: int = 1,
     max_episodes: int | None = None,
     target_from_prompt: bool = False,
+    obscure_color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
+    obscure_margin: int = 16,
     **kwargs: Any,
 ) -> Path:
     """Convenience functional API for augmenting a LeRobot dataset."""
@@ -555,6 +566,8 @@ def augment_dataset(
         conf_threshold=conf_threshold,
         model_name=model_name,
         device=device,
+        obscure_color=obscure_color,
+        obscure_margin=obscure_margin,
         **kwargs,
     )
     return augmentor.augment(

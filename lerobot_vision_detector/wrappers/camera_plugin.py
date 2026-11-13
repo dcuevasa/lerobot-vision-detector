@@ -22,11 +22,13 @@ logger = logging.getLogger("lerobot_vision_detector")
 @dataclass(kw_only=True)
 class DetectedOpenCVCameraConfig(OpenCVCameraConfig):
     """Configuration for an OpenCV camera with integrated real-time detection."""
-    mode: str = "bbox"  # "bbox", "seg", or "both"
+    mode: str = "bbox"  # "bbox", "seg", "both", or "obscure"
     target_objects: str | None = None  # e.g. "cup" or "cup,bottle"
     model_name: str | None = None  # e.g. "yolov8n.pt" or "yolov8n-seg.pt"
     conf_threshold: float = 0.25
     device: str | None = None
+    obscure_color: str = "255,255,255"
+    obscure_margin: int = 16
 
 
 class DetectedOpenCVCamera(OpenCVCamera):
@@ -38,10 +40,16 @@ class DetectedOpenCVCamera(OpenCVCamera):
         self.mode = config.mode
         self.target_objects = config.target_objects
         self.conf_threshold = config.conf_threshold
+        self.obscure_color = config.obscure_color
+        self.obscure_margin = config.obscure_margin
 
         m_name = config.model_name
         if m_name is None:
-            m_name = "yolov8n-seg.pt" if self.mode in ("seg", "mask") else "yolov8n.pt"
+            m_name = (
+                "yolov8n-seg.pt"
+                if self.mode.lower() in ("seg", "mask", "obscure", "obscure_mask", "obscuring_mask")
+                else "yolov8n.pt"
+            )
 
         self.detector: BaseDetector = make_detector(
             detector_type="yolo",
@@ -58,6 +66,8 @@ class DetectedOpenCVCamera(OpenCVCamera):
             mode=self.mode,
             target_objects=self.target_objects,
             conf_threshold=self.conf_threshold,
+            obscure_color=self.obscure_color,
+            obscure_margin=self.obscure_margin,
         )
 
     def read(self) -> np.ndarray:

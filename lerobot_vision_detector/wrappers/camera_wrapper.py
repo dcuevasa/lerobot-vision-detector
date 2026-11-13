@@ -30,12 +30,14 @@ class DetectedCameraWrapper(Camera):
         base_camera: Camera,
         detector: BaseDetector | None = None,
         camera_name: str = "camera",
-        mode: str = "bbox",  # "bbox", "seg", or "both"
+        mode: str = "bbox",  # "bbox", "seg", "both", or "obscure"
         target_objects: str | Sequence[str] | None = None,
         conf_threshold: float = 0.25,
         enabled: bool = True,
         mask_alpha: float = 0.45,
         box_thickness: int = 2,
+        obscure_color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
+        obscure_margin: int = 16,
         detector_type: str = "yolo",
         model_name: str | None = None,
         device: str | None = None,
@@ -59,6 +61,8 @@ class DetectedCameraWrapper(Camera):
         self.enabled = enabled
         self.mask_alpha = mask_alpha
         self.box_thickness = box_thickness
+        self.obscure_color = obscure_color
+        self.obscure_margin = obscure_margin
 
         super().__init__(dummy_config)
 
@@ -140,6 +144,8 @@ class DetectedCameraWrapper(Camera):
                 conf_threshold=self.conf_threshold,
                 mask_alpha=self.mask_alpha,
                 box_thickness=self.box_thickness,
+                obscure_color=self.obscure_color,
+                obscure_margin=self.obscure_margin,
             )
             self.latest_annotated_frame = annotated
             return annotated

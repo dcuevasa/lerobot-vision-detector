@@ -54,7 +54,7 @@ class VisionDetectorConfig:
     """Configuration for real-time vision detection on camera feeds."""
     enabled: bool = True
     detector_type: str = "yolo"  # 'yolo', 'grounded_sam', 'owlv2', or 'mock'
-    mode: str = "bbox"  # "bbox", "seg", or "both"
+    mode: str = "bbox"  # "bbox", "seg", "both", or "obscure"
     cameras: str = "all"  # Comma-separated camera names, or 'all'
     target_objects: str | None = None  # Comma-separated target classes, or None for all
     model_name: str | None = None  # e.g. 'yolov8n.pt', 'yolov8n-seg.pt', 'vit_h', 'vit_b'
@@ -62,6 +62,8 @@ class VisionDetectorConfig:
     text_threshold: float = 0.25
     sam_version: str | None = None  # 'vit_h' or 'vit_b' for Grounded-SAM
     device: str | None = None
+    obscure_color: str = "255,255,255"
+    obscure_margin: int = 16
 
 
 @dataclass
@@ -216,6 +218,8 @@ def record(cfg: DetectedRecordConfig) -> LeRobotDataset:
             device=cfg.detector.device,
             sam_version=cfg.detector.sam_version,
             text_threshold=cfg.detector.text_threshold,
+            obscure_color=cfg.detector.obscure_color,
+            obscure_margin=cfg.detector.obscure_margin,
         )
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()

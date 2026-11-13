@@ -9,9 +9,13 @@ import numpy as np
 
 from ..utils.drawing import (
     draw_bounding_box,
+    draw_obscuring_mask,
     draw_segmentation_mask,
     get_color_for_class,
+    parse_rgb_color,
 )
+
+OBSCURE_MODES = ("obscure", "obscure_mask", "obscuring_mask")
 
 
 @dataclass
@@ -120,11 +124,15 @@ class BaseDetector(ABC):
         target_objects: str | Sequence[str] | None = None,
         conf_threshold: float = 0.25,
         device: str | None = None,
+        obscure_color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
+        obscure_margin: int = 16,
     ):
         self.mode = mode.lower()
         self.target_objects = target_objects
         self.conf_threshold = conf_threshold
         self.device = device
+        self.obscure_color = parse_rgb_color(obscure_color)
+        self.obscure_margin = max(1, int(obscure_margin))
 
     @abstractmethod
     def predict(self, image: np.ndarray) -> DetectionResult:
@@ -147,13 +155,15 @@ class BaseDetector(ABC):
         draw_scores: bool = True,
         mask_alpha: float = 0.45,
         box_thickness: int = 2,
+        obscure_color: tuple[int, int, int] | Sequence[int] | str | None = None,
+        obscure_margin: int | None = None,
     ) -> np.ndarray:
         """Render detections onto the input image array.
 
         Args:
             image: Input RGB image (H, W, 3).
             result: Precomputed DetectionResult (if None, calls predict(image)).
-            mode: 'bbox', 'seg', or 'both'. Defaults to self.mode.
+            mode: 'bbox', 'seg', 'both', or 'obscure'. Defaults to self.mode.
             target_objects: Object filter. Defaults to self.target_objects.
             conf_threshold: Confidence filter. Defaults to self.conf_threshold.
             color_palette: Custom RGB palette.
@@ -161,6 +171,8 @@ class BaseDetector(ABC):
             draw_scores: Whether to render confidence scores.
             mask_alpha: Opacity for segmentation masks.
             box_thickness: Bounding box line thickness.
+            obscure_color: Solid reserved RGB color used when mode is 'obscure'.
+            obscure_margin: Minimum L_inf distance from obscure_color for background pixels.
 
         Returns:
             Annotated RGB numpy image array.
@@ -173,6 +185,40 @@ class BaseDetector(ABC):
             result = self.predict(image)
 
         filtered = result.filter_by_targets(active_targets, active_conf)
+
+        # Obscuring mask mode: reserve solid color across palette and anonymize targets
+        if active_mode in OBSCURE_MODES:
+            resolved_color = (
+                parse_rgb_color(obscure_color)
+                if obscure_color is not None
+                else getattr(self, "obscure_color", (255, 255, 255))
+            )
+            resolved_margin = (
+                max(1, int(obscure_margin))
+                if obscure_margin is not None
+                else getattr(self, "obscure_margin", 16)
+            )
+            h, w = image.shape[:2]
+            masks: list[np.ndarray] = []
+            for det in filtered.detections:
+                if det.mask is not None and det.mask.mask is not None:
+                    masks.append(det.mask.mask)
+                elif det.box is not None:
+                    box_mask = np.zeros((h, w), dtype=bool)
+                    x1 = max(0, min(w, int(round(det.box.x1))))
+                    y1 = max(0, min(h, int(round(det.box.y1))))
+                    x2 = max(0, min(w, int(round(det.box.x2))))
+                    y2 = max(0, min(h, int(round(det.box.y2))))
+                    if x2 > x1 and y2 > y1:
+                        box_mask[y1:y2, x1:x2] = True
+                        masks.append(box_mask)
+            return draw_obscuring_mask(
+                image,
+                masks,
+                color=resolved_color,
+                margin=resolved_margin,
+            )
+
         annotated = image.copy()
 
         # Render segmentation masks first so boxes draw cleanly on top

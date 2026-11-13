@@ -25,13 +25,15 @@ class MultiCameraVisionWrapper:
         cameras: dict[str, Camera],
         camera_keys: Sequence[str] | str | None = None,
         detector: BaseDetector | None = None,
-        mode: str = "bbox",  # "bbox", "seg", or "both"
+        mode: str = "bbox",  # "bbox", "seg", "both", or "obscure"
         target_objects: str | Sequence[str] | None = None,
         conf_threshold: float = 0.25,
         model_name: str | None = None,
         device: str | None = None,
         mask_alpha: float = 0.45,
         box_thickness: int = 2,
+        obscure_color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
+        obscure_margin: int = 16,
         detector_type: str = "yolo",
         **kwargs: Any,
     ):
@@ -41,6 +43,8 @@ class MultiCameraVisionWrapper:
         self.conf_threshold = conf_threshold
         self.mask_alpha = mask_alpha
         self.box_thickness = box_thickness
+        self.obscure_color = obscure_color
+        self.obscure_margin = obscure_margin
 
         # Normalize specified camera keys
         if camera_keys is None or camera_keys == "all":
@@ -83,6 +87,8 @@ class MultiCameraVisionWrapper:
                     conf_threshold=conf_threshold,
                     mask_alpha=mask_alpha,
                     box_thickness=box_thickness,
+                    obscure_color=obscure_color,
+                    obscure_margin=obscure_margin,
                 )
             else:
                 logger.info(f"Camera '{cam_key}' is UNSPECIFIED. Keeping raw camera stream untouched.")
