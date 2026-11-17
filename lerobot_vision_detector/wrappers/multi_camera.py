@@ -36,6 +36,8 @@ class MultiCameraVisionWrapper:
         obscure_margin: int = 16,
         distractor_objects: str | Sequence[str] | None = None,
         detector_type: str = "yolo",
+        initial_frames: int | None = None,
+        reuse_initial_detection: bool = True,
         **kwargs: Any,
     ):
         self.raw_cameras = cameras
@@ -108,6 +110,8 @@ class MultiCameraVisionWrapper:
                     obscure_color=obscure_color,
                     obscure_margin=obscure_margin,
                     exclude_objects=self.distractor_objects or None,
+                    initial_frames=initial_frames,
+                    reuse_initial_detection=reuse_initial_detection,
                 )
             else:
                 logger.info(f"Camera '{cam_key}' is UNSPECIFIED. Keeping raw camera stream untouched.")
@@ -144,6 +148,17 @@ class MultiCameraVisionWrapper:
             if isinstance(cam, DetectedCameraWrapper):
                 cam.enabled = enabled
 
+    def reset(self) -> None:
+        """Reset frame counters and cached detections across all wrapped cameras."""
+        reset_wrapped_cameras(self.wrapped_cameras)
+
+
+def reset_wrapped_cameras(cameras: Mapping[str, Any]) -> None:
+    """Reset per-episode frame counters on any DetectedCameraWrapper in a camera mapping."""
+    for cam in cameras.values():
+        if isinstance(cam, DetectedCameraWrapper):
+            cam.reset()
+
 
 def wrap_cameras(
     cameras: dict[str, Camera],
@@ -155,6 +170,8 @@ def wrap_cameras(
     conf_threshold: float = 0.25,
     model_name: str | None = None,
     device: str | None = None,
+    initial_frames: int | None = None,
+    reuse_initial_detection: bool = True,
     **kwargs: Any,
 ) -> dict[str, Camera]:
     """Helper function to wrap a camera dictionary with detection capabilities.
@@ -183,6 +200,8 @@ def wrap_cameras(
         conf_threshold=conf_threshold,
         model_name=model_name,
         device=device,
+        initial_frames=initial_frames,
+        reuse_initial_detection=reuse_initial_detection,
         **kwargs,
     )
     return wrapper.get_cameras()

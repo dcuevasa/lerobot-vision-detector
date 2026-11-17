@@ -7,7 +7,7 @@ from typing import Any, Sequence
 from lerobot.robots.robot import Robot
 
 from ..detectors.base import BaseDetector
-from .multi_camera import MultiCameraVisionWrapper, wrap_cameras
+from .multi_camera import MultiCameraVisionWrapper, reset_wrapped_cameras, wrap_cameras
 
 logger = logging.getLogger("lerobot_vision_detector")
 
@@ -22,6 +22,8 @@ def wrap_robot_cameras(
     conf_threshold: float = 0.25,
     model_name: str | None = None,
     device: str | None = None,
+    initial_frames: int | None = None,
+    reuse_initial_detection: bool = True,
     **kwargs: Any,
 ) -> Robot:
     """Wraps specified cameras of a LeRobot Robot instance with real-time detectors.
@@ -62,7 +64,15 @@ def wrap_robot_cameras(
         conf_threshold=conf_threshold,
         model_name=model_name,
         device=device,
+        initial_frames=initial_frames,
+        reuse_initial_detection=reuse_initial_detection,
         **kwargs,
     )
     robot.cameras = wrapped_cams
     return robot
+
+
+def reset_robot_cameras(robot: Robot) -> None:
+    """Reset per-episode frame counters and cached detections across wrapped robot cameras."""
+    if hasattr(robot, "cameras") and robot.cameras:
+        reset_wrapped_cameras(robot.cameras)

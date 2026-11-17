@@ -44,7 +44,7 @@ from lerobot.utils.control_utils import (
 from lerobot.utils.utils import init_logging, log_say
 from lerobot.utils.visualization_utils import init_rerun
 
-from ..wrappers.robot_wrapper import wrap_robot_cameras
+from ..wrappers.robot_wrapper import reset_robot_cameras, wrap_robot_cameras
 
 logger = logging.getLogger("lerobot_vision_record")
 
@@ -65,6 +65,8 @@ class VisionDetectorConfig:
     obscure_color: str = "255,255,255"
     obscure_margin: int = 16
     distractor_objects: str | None = None
+    initial_frames: int | None = None
+    reuse_initial_detection: bool = True
 
 
 @dataclass
@@ -222,6 +224,8 @@ def record(cfg: DetectedRecordConfig) -> LeRobotDataset:
             obscure_color=cfg.detector.obscure_color,
             obscure_margin=cfg.detector.obscure_margin,
             distractor_objects=cfg.detector.distractor_objects,
+            initial_frames=cfg.detector.initial_frames,
+            reuse_initial_detection=cfg.detector.reuse_initial_detection,
         )
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
@@ -308,6 +312,7 @@ def record(cfg: DetectedRecordConfig) -> LeRobotDataset:
             events["discard_episode"] = False
 
             print(f"Recording episode {captured_episodes + 1}/{total_episodes}...")
+            reset_robot_cameras(robot)
             start_time = time.perf_counter()
             max_duration = cfg.dataset.episode_time_s
 

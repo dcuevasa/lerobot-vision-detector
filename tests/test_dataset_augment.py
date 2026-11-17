@@ -158,6 +158,47 @@ class TestDatasetAugment(unittest.TestCase):
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
+    def test_offline_augment_initial_frames_limits_detection_window(self):
+        source_repo = "bendca61/mujoco-so101-cube_on_tray-mouse-v1"
+        output_repo = "local/test_unittest_initial_frames"
+
+        tmp_dir = Path(tempfile.mkdtemp())
+        try:
+            out_dir = tmp_dir / "augmented_init2"
+            mock_det = make_detector("mock", mode="obscure", default_class="cube")
+            predict_batch_counts: list[int] = []
+            orig_predict_batch = mock_det.predict_batch
+
+            def _counting_predict_batch(images):
+                predict_batch_counts.append(len(images))
+                return orig_predict_batch(images)
+
+            mock_det.predict_batch = _counting_predict_batch  # type: ignore[method-assign]
+            augmentor = DatasetVideoAugmentor(
+                detector=mock_det,
+                mode="obscure",
+                target_objects="cube",
+            )
+
+            augmentor.augment(
+                input_repo=source_repo,
+                output_repo=output_repo,
+                cameras="wrist_cam",
+                output_dir=out_dir,
+                overwrite=True,
+                max_episodes=1,
+                initial_frames=2,
+            )
+
+            ann_data = json.loads((out_dir / "meta" / "lerobot_vision_detections.json").read_text(encoding="utf-8"))
+            self.assertEqual(ann_data["initial_frames"], 2)
+            self.assertEqual(ann_data["processed_cameras"], ["observation.images.wrist_cam"])
+            self.assertEqual(sum(predict_batch_counts), 2)
+            det_frames = {d["frame"] for d in ann_data["episodes"]["0"]["detections"]}
+            self.assertEqual(det_frames, {0, 1})
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

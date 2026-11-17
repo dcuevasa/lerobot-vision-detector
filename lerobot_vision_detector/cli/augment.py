@@ -154,6 +154,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Keyframe detection stride (e.g. --stride 2 or --stride 3 speeds up inference 2-3x by propagating masks).",
     )
     parser.add_argument(
+        "--initial_frames",
+        type=int,
+        default=None,
+        help="If set (e.g. 5), annotate only the first N frames of each episode and keep subsequent frames unmodified.",
+    )
+    parser.add_argument(
         "--target_from_prompt",
         action="store_true",
         help="Dynamically extract a single target object per episode from its task prompt matching --target_objects.",
@@ -214,6 +220,7 @@ def main() -> None:
         max_episodes=args.max_episodes,
         target_from_prompt=args.target_from_prompt,
         prompt_replacement=args.prompt_replacement,
+        initial_frames=args.initial_frames,
     )
 
     logger.info(f"Augmentation pipeline finished successfully! Dataset saved at: {out_path}")

@@ -9,17 +9,19 @@ cd "$SCRIPT_DIR"
 TARGET_OBJECT="${1:-cup}"
 SOURCE_COLOR="${2:-pink}"
 DEST_COLOR="${3:-yellow}"
-POLICY_PATH="${4:-bendca61/xvla-so101-surface-transfer-gsam-obscure}"
+POLICY_PATH="${4:-bendca61/xvla-so101-surface-transfer-gsam-obscure-init5}"
 
 TASK_DESC="Move the masked object from the ${SOURCE_COLOR} surface to the ${DEST_COLOR} surface"
-DETECTOR_SEG_MODEL="${DETECTOR_SEG_MODEL:-yolo11x-seg.pt}"
-DETECTOR_TYPE="${DETECTOR_TYPE:-yolo}"
+DETECTOR_TYPE="${DETECTOR_TYPE:-grounded_sam}"
+SAM_VERSION="${SAM_VERSION:-vit_b}"
+INITIAL_FRAMES="${INITIAL_FRAMES:-5}"
+DETECTOR_SEG_MODEL="${DETECTOR_SEG_MODEL:-$SAM_VERSION}"
 
 echo "=================================================================="
 echo "Evaluating X-VLA: Masked-Object Color Surface Transfer (6-DoF)"
 echo "  Policy Path:     $POLICY_PATH"
 echo "  Policy Prompt:   $TASK_DESC"
-echo "  Detector Target: $TARGET_OBJECT ($DETECTOR_TYPE / $DETECTOR_SEG_MODEL, mode=obscure)"
+echo "  Detector Target: $TARGET_OBJECT ($DETECTOR_TYPE / $DETECTOR_SEG_MODEL, mode=obscure, init=${INITIAL_FRAMES}f)"
 echo "  Robot:           so101_follower ($FOLLOWER_ID on $FOLLOWER_PORT)"
 echo "  Wrapped Cameras: $DETECTOR_CAMERAS"
 echo "=================================================================="
@@ -36,7 +38,10 @@ python -m lerobot_vision_detector.cli.eval_policy \
     --rename_map='{"observation.images.cam_high": "observation.images.image", "observation.images.cam_wrist": "observation.images.image2"}' \
     --detector.enabled=true \
     --detector.detector_type="$DETECTOR_TYPE" \
+    --detector.sam_version="$SAM_VERSION" \
     --detector.mode=obscure \
+    --detector.initial_frames="$INITIAL_FRAMES" \
+    --detector.reuse_initial_detection=true \
     --detector.target_objects="$TARGET_OBJECT" \
     --detector.distractor_objects="robot" \
     --detector.cameras="$DETECTOR_CAMERAS" \

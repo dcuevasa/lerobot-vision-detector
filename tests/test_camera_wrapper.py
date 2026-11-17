@@ -168,6 +168,61 @@ class TestCameraWrapper(unittest.TestCase):
         self.assertTrue(np.all(frame[20:60, 20:60] == (255, 255, 255)))
         self.assertTrue(np.all(frame[100:150, 100:150] == (0, 0, 0)))
 
+    def test_initial_frames_caches_detection_and_resets(self):
+        from lerobot_vision_detector.detectors.base import Box, Detection, DetectionResult, Mask
+        from lerobot_vision_detector.wrappers import reset_wrapped_cameras
+
+        class CountingDetector:
+            def __init__(self):
+                self.predict_calls = 0
+
+            def predict(self, image):
+                self.predict_calls += 1
+                h, w = image.shape[:2]
+                mask = np.zeros((h, w), dtype=bool)
+                mask[10:30, 10:30] = True
+                return DetectionResult(
+                    detections=[
+                        Detection("cup", 0, 0.9, Box(10, 10, 30, 30, 0.9, 0, "cup"), Mask(mask, 0.9, 0, "cup")),
+                    ],
+                    image_shape=image.shape,
+                )
+
+            def annotate(self, *args, **kwargs):
+                helper = make_detector("mock", mode="obscure")
+                return helper.annotate(*args, **kwargs)
+
+        det = CountingDetector()
+        cams = {"cam_high": DummyCamera()}
+        wrapped = wrap_cameras(
+            cameras=cams,
+            camera_keys=["cam_high"],
+            detector=det,  # type: ignore[arg-type]
+            mode="obscure",
+            target_objects="cup",
+            initial_frames=3,
+            reuse_initial_detection=True,
+        )
+        cam = wrapped["cam_high"]
+
+        # Frames 0, 1, 2: obscured, predict() called only ONCE on frame 0
+        for _ in range(3):
+            f = cam.read()
+            self.assertTrue(np.all(f[10:30, 10:30] == (255, 255, 255)))
+        self.assertEqual(det.predict_calls, 1)
+
+        # Frames 3, 4: bypassed completely (raw black frame returned, 0 predict calls)
+        for _ in range(2):
+            f = cam.read()
+            self.assertTrue(np.all(f == 0))
+        self.assertEqual(det.predict_calls, 1)
+
+        # Reset for new episode: frame 0 triggers fresh predict and obscures again
+        reset_wrapped_cameras(wrapped)
+        f_reset = cam.read()
+        self.assertEqual(det.predict_calls, 2)
+        self.assertTrue(np.all(f_reset[10:30, 10:30] == (255, 255, 255)))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -42,6 +42,8 @@ class DetectedCameraWrapper(Camera):
         detector_type: str = "yolo",
         model_name: str | None = None,
         device: str | None = None,
+        initial_frames: int | None = None,
+        reuse_initial_detection: bool = True,
         **kwargs: Any,
     ):
         # We initialize the parent Camera class with a dummy or cloned config
@@ -65,6 +67,10 @@ class DetectedCameraWrapper(Camera):
         self.obscure_color = obscure_color
         self.obscure_margin = obscure_margin
         self.exclude_objects = exclude_objects
+        self.initial_frames = (
+            int(initial_frames) if initial_frames is not None and int(initial_frames) > 0 else None
+        )
+        self.reuse_initial_detection = bool(reuse_initial_detection)
 
         super().__init__(dummy_config)
 
@@ -82,6 +88,8 @@ class DetectedCameraWrapper(Camera):
             self.detector = detector
 
         self._lock = threading.Lock()
+        self._frame_count: int = 0
+        self._initial_detection: DetectionResult | None = None
         self.latest_detection_result: DetectionResult | None = None
         self.latest_annotated_frame: np.ndarray | None = None
         self.latest_raw_frame: np.ndarray | None = None
@@ -126,16 +134,39 @@ class DetectedCameraWrapper(Camera):
         """Disconnect the underlying camera."""
         self.base_camera.disconnect()
 
+    def reset(self) -> None:
+        """Reset per-episode frame counter and cached initial detection."""
+        with self._lock:
+            self._frame_count = 0
+            self._initial_detection = None
+            self.latest_detection_result = None
+
     def _process_frame(self, raw_frame: np.ndarray) -> np.ndarray:
         """Internal helper to run detection and annotate frame."""
         with self._lock:
             self.latest_raw_frame = raw_frame
-            if not self.enabled:
+            if raw_frame is None or not self.enabled:
                 self.latest_annotated_frame = raw_frame
                 self.latest_detection_result = None
                 return raw_frame
 
-            det_res = self.detector.predict(raw_frame)
+            if self.initial_frames is not None:
+                if self._frame_count >= self.initial_frames:
+                    self._frame_count += 1
+                    self.latest_annotated_frame = raw_frame
+                    self.latest_detection_result = None
+                    return raw_frame
+
+                if self.reuse_initial_detection and self._initial_detection is not None:
+                    det_res = self._initial_detection
+                else:
+                    det_res = self.detector.predict(raw_frame)
+                    self._initial_detection = det_res
+                self._frame_count += 1
+            else:
+                det_res = self.detector.predict(raw_frame)
+                self._frame_count += 1
+
             self.latest_detection_result = det_res
 
             annotated = self.detector.annotate(

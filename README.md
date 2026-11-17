@@ -234,6 +234,14 @@ python -m lerobot_vision_detector.cli.augment \
     --overwrite
 ```
 
+### Initial-Frames Visual Prompting (`--initial_frames`, Zero Runtime Latency):
+
+Running heavy open-vocabulary segmentation (`Grounded-SAM`) on every control frame (`30 Hz`) introduces latency. Setting `--initial_frames N` (e.g. `5`) renders the visual prompt (`mode=obscure`, `seg`, `bbox`) only on frames `0 .. N-1` of each episode and passes unmodified raw camera frames from frame `N` onward (`30 Hz` at 0 ms detector overhead):
+
+- **Offline dataset augmentation (`lerobot-vision-augment`):** pass `--initial_frames 5` to annotate only the initial window of each episode.
+- **Fast hybrid splicing (`scripts/mix_initial_frames_dataset.py`):** reuse an existing obscured dataset for frames `0 .. N-1` and splice raw frames for `N .. T-1`.
+- **Real-time inference (`lerobot-vision-eval` / `lerobot-vision-record`):** pass `--detector.initial_frames=5 --detector.reuse_initial_detection=true` so Grounded-SAM runs **once** on frame 0, reuses that mask across frames `0..4`, and streams raw frames untouched from frame 5 onward. Reset between episodes via `reset_robot_cameras(robot)`.
+
 ### Python API:
 
 #### 1. YOLO Backend
@@ -344,6 +352,9 @@ wrapped_cameras = wrap_cameras(
 | `scripts/cameras_teleop_open_vocab.sh` | Open-vocabulary teleoperation on both cameras (e.g. `green tape`, `mug`). |
 | `scripts/teleop_mask_mug.sh` | Teleoperates with real-time instance segmentation mask over a mug. |
 | `scripts/eval_detected.sh` | Runs trained policies (ACT / Diffusion) with real-time camera detections. |
+| `scripts/mix_initial_frames_dataset.py` | Splices initial `N` obscured frames per episode with raw frames thereafter. |
+| `scripts/eval_masked_color_transfer_*.sh` | Evaluates SmolVLA / X-VLA / ACT with initial-5-frame Grounded-SAM obscuring. |
+| `scripts/run_masked_color_transfer_*_5070.sh` | Runs SmolVLA / X-VLA / ACT on RTX 5070 via `lerobot-vision-record` (`init=5f`). |
 
 ---
 

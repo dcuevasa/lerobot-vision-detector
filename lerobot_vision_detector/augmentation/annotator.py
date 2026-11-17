@@ -238,6 +238,7 @@ class DatasetVideoAugmentor:
         max_episodes: int | None = None,
         target_from_prompt: bool = False,
         prompt_replacement: str | None = None,
+        initial_frames: int | None = None,
     ) -> Path:
         """Run detection pipeline on the specified cameras of an input dataset.
 
@@ -441,9 +442,14 @@ class DatasetVideoAugmentor:
                 annotated_frames = np.empty_like(raw_frames)
 
                 effective_stride = max(1, int(stride))
+                active_num_frames = (
+                    min(num_frames, int(initial_frames))
+                    if initial_frames is not None and int(initial_frames) > 0
+                    else num_frames
+                )
 
-                # 1. Identify strided keyframe indices
-                keyframe_indices = list(range(0, num_frames, effective_stride))
+                # 1. Identify strided keyframe indices within active window
+                keyframe_indices = list(range(0, active_num_frames, effective_stride))
                 keyframe_raw = [raw_frames[k] for k in keyframe_indices]
 
                 # 2. Run batched detector inference ONLY on keyframes
@@ -454,8 +460,8 @@ class DatasetVideoAugmentor:
                     batch_res = self.detector.predict_batch(batch_raw)
                     keyframe_results.extend(batch_res)
 
-                # 3. Annotate ALL frames (propagating keyframe detections smoothly)
-                for idx in range(num_frames):
+                # 3. Annotate frames in the active window (propagating keyframe detections smoothly)
+                for idx in range(active_num_frames):
                     key_idx = min(idx // effective_stride, len(keyframe_results) - 1)
                     det_res = keyframe_results[key_idx]
 
@@ -489,6 +495,10 @@ class DatasetVideoAugmentor:
                                 "confidence": det.confidence,
                                 "box_xyxy": det.box.xyxy if det.box else None,
                             })
+
+                # Copy remaining frames unmodified when initial_frames limits annotation window
+                if active_num_frames < num_frames:
+                    annotated_frames[active_num_frames:] = raw_frames[active_num_frames:]
 
                 # Replace raw video with annotated video
                 decoded_videos[vk] = annotated_frames
@@ -543,6 +553,7 @@ class DatasetVideoAugmentor:
                     "distractor_objects": self.distractor_objects or None,
                     "target_from_prompt": target_from_prompt,
                     "mode": self.mode,
+                    "initial_frames": int(initial_frames) if initial_frames is not None and int(initial_frames) > 0 else None,
                     "obscure_color": list(self.obscure_color) if self.mode.lower() in OBSCURE_MODES else None,
                     "obscure_margin": self.obscure_margin if self.mode.lower() in OBSCURE_MODES else None,
                     "processed_cameras": process_video_keys,
@@ -593,6 +604,7 @@ def augment_dataset(
     max_episodes: int | None = None,
     target_from_prompt: bool = False,
     prompt_replacement: str | None = None,
+    initial_frames: int | None = None,
     obscure_color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
     obscure_margin: int = 16,
     distractor_objects: str | Sequence[str] | None = None,
@@ -624,4 +636,5 @@ def augment_dataset(
         max_episodes=max_episodes,
         target_from_prompt=target_from_prompt,
         prompt_replacement=prompt_replacement,
+        initial_frames=initial_frames,
     )

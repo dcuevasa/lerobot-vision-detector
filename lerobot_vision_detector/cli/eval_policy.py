@@ -30,7 +30,7 @@ from lerobot.robots import make_robot_from_config
 from lerobot.utils.utils import init_logging
 from lerobot.utils.visualization_utils import init_rerun
 
-from ..wrappers.robot_wrapper import wrap_robot_cameras
+from ..wrappers.robot_wrapper import reset_robot_cameras, wrap_robot_cameras
 
 logger = logging.getLogger("lerobot_vision_eval")
 
@@ -50,6 +50,8 @@ class VisionEvalDetectorConfig:
     obscure_color: str = "255,255,255"
     obscure_margin: int = 16
     distractor_objects: str | None = None
+    initial_frames: int | None = None
+    reuse_initial_detection: bool = True
 
 
 @dataclass
@@ -102,6 +104,8 @@ def eval_policy(cfg: DetectedEvalConfig) -> None:
             obscure_color=cfg.detector.obscure_color,
             obscure_margin=cfg.detector.obscure_margin,
             distractor_objects=cfg.detector.distractor_objects,
+            initial_frames=cfg.detector.initial_frames,
+            reuse_initial_detection=cfg.detector.reuse_initial_detection,
         )
 
     # 3. Load Policy and Processors
@@ -117,6 +121,7 @@ def eval_policy(cfg: DetectedEvalConfig) -> None:
 
     robot.connect()
     policy.eval()
+    reset_robot_cameras(robot)
 
     logger.info("Starting policy evaluation loop with live vision detections...")
     try:
