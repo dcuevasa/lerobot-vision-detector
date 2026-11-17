@@ -33,7 +33,7 @@ python -m lerobot_vision_detector.cli.eval_policy \
     --policy.pretrained_path="$POLICY_PATH" \
     --policy.device=cuda \
     --single_task="$TASK_DESC" \
-    --rename_map='{"observation.images.cam_high": "observation.images.image"}' \
+    --rename_map='{"observation.images.cam_high": "observation.images.camera1", "observation.images.cam_wrist": "observation.images.camera2"}' \
     --detector.enabled=true \
     --detector.detector_type="$DETECTOR_TYPE" \
     --detector.mode=obscure \

@@ -18,7 +18,7 @@ fi
 
 rm -rf "$HOME/.cache/huggingface/lerobot/local/eval_smolvla_masked_transfer"
 
-CAMERAS_JSON='{"image": {"type": "intelrealsense", "serial_number_or_name": "944622074682", "width": 640, "height": 480, "fps": 30, "use_depth": false}}'
+CAMERAS_JSON='{"camera1": {"type": "intelrealsense", "serial_number_or_name": "944622074682", "width": 640, "height": 480, "fps": 30, "use_depth": false}, "camera2": {"type": "opencv", "index_or_path": "/dev/v4l/by-id/usb-Arducam_Technology_Co.__Ltd._Arducam_OV9281_USB_Camera_UC599-video-index0", "width": 640, "height": 480, "fps": 30}}'
 
 echo "=================================================================="
 echo "Running SmolVLA Masked-Object Surface Transfer (RTX 5070)"
@@ -34,7 +34,7 @@ lerobot-vision-record \
   --robot.cameras="$CAMERAS_JSON" \
   --detector.enabled=true \
   --detector.detector_type="$DETECTOR_TYPE" \
-  --detector.cameras="image" \
+  --detector.cameras="camera1" \
   --detector.mode=obscure \
   --detector.target_objects="$TARGET_OBJECT" \
   --detector.distractor_objects="robot" \
