@@ -108,6 +108,20 @@ def extract_target_from_prompt(
     return best_match[2] if best_match is not None else None
 
 
+def replace_target_in_prompt(
+    task_prompt: str,
+    target: str | None,
+    replacement: str | None,
+) -> str:
+    """Replace whole-word mentions of `target` in `task_prompt` with `replacement`."""
+    if not task_prompt or not target or not replacement:
+        return task_prompt
+    parts = target.split()
+    pattern_body = r"\s+".join(re.escape(p) for p in parts)
+    pattern = re.compile(rf"(?<!\w){pattern_body}(?!\w)", flags=re.IGNORECASE)
+    return pattern.sub(replacement, task_prompt)
+
+
 def _lookup_task_by_index(tasks_meta: Any, t_idx: int) -> str | None:
     """Resolve an integer `task_index` from `src_ds.meta.tasks`."""
     if tasks_meta is None:
@@ -223,6 +237,7 @@ class DatasetVideoAugmentor:
         stride: int = 1,
         max_episodes: int | None = None,
         target_from_prompt: bool = False,
+        prompt_replacement: str | None = None,
     ) -> Path:
         """Run detection pipeline on the specified cameras of an input dataset.
 
@@ -367,6 +382,7 @@ class DatasetVideoAugmentor:
             task_str = _resolve_episode_task(src_ds, ep_meta, hf_slice)
 
             active_targets: str | Sequence[str] | None = self.target_objects
+            extracted_target: str | None = None
             if target_from_prompt:
                 extracted_target = extract_target_from_prompt(task_str, self.target_objects)
                 if extracted_target is not None:
@@ -386,6 +402,10 @@ class DatasetVideoAugmentor:
                             self.detector.set_classes(query_classes)
                         except NotImplementedError:
                             pass
+            elif prompt_replacement and self.target_objects:
+                extracted_target = extract_target_from_prompt(task_str, self.target_objects)
+
+            prompt_task_str = replace_target_in_prompt(task_str, extracted_target, prompt_replacement)
 
             # Decode video frames for each video key
             decoded_videos: dict[str, np.ndarray] = {}
@@ -493,12 +513,14 @@ class DatasetVideoAugmentor:
                     if resolved is not None:
                         current_task = resolved
 
-                frame_dict["task"] = current_task
+                frame_dict["task"] = replace_target_in_prompt(
+                    current_task, extracted_target, prompt_replacement
+                )
                 new_ds.add_frame(frame_dict)
 
             new_ds.save_episode()
             annotated_events[str(ep_idx)] = {
-                "task": task_str,
+                "task": prompt_task_str,
                 "target_objects": list(active_targets)
                 if isinstance(active_targets, (list, tuple))
                 else active_targets,
@@ -570,6 +592,7 @@ def augment_dataset(
     stride: int = 1,
     max_episodes: int | None = None,
     target_from_prompt: bool = False,
+    prompt_replacement: str | None = None,
     obscure_color: tuple[int, int, int] | Sequence[int] | str = (255, 255, 255),
     obscure_margin: int = 16,
     distractor_objects: str | Sequence[str] | None = None,
@@ -600,4 +623,5 @@ def augment_dataset(
         stride=stride,
         max_episodes=max_episodes,
         target_from_prompt=target_from_prompt,
+        prompt_replacement=prompt_replacement,
     )

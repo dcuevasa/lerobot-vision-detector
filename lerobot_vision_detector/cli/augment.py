@@ -159,6 +159,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Dynamically extract a single target object per episode from its task prompt matching --target_objects.",
     )
     parser.add_argument(
+        "--prompt_replacement",
+        type=str,
+        default=None,
+        help="Optional phrase replacing the matched target object in task prompts (e.g. 'masked object').",
+    )
+    parser.add_argument(
         "--max_episodes",
         type=int,
         default=None,
@@ -207,6 +213,7 @@ def main() -> None:
         stride=args.stride,
         max_episodes=args.max_episodes,
         target_from_prompt=args.target_from_prompt,
+        prompt_replacement=args.prompt_replacement,
     )
 
     logger.info(f"Augmentation pipeline finished successfully! Dataset saved at: {out_path}")
