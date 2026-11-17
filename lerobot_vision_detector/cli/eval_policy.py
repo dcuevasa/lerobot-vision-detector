@@ -38,11 +38,14 @@ logger = logging.getLogger("lerobot_vision_eval")
 @dataclass
 class VisionEvalDetectorConfig:
     enabled: bool = True
+    detector_type: str = "yolo"  # 'yolo', 'grounded_sam', 'owlv2', or 'mock'
     mode: str = "bbox"  # "bbox", "seg", "both", or "obscure"
     cameras: str = "all"  # Comma-separated cameras to process, or 'all'
     target_objects: str | None = None  # Comma-separated target objects
     model_name: str | None = None  # e.g. 'yolov8n.pt' or 'yolov8n-seg.pt'
     conf_threshold: float = 0.25
+    text_threshold: float = 0.25
+    sam_version: str | None = None  # 'vit_h' or 'vit_b' for Grounded-SAM
     device: str | None = None
     obscure_color: str = "255,255,255"
     obscure_margin: int = 16
@@ -54,6 +57,8 @@ class DetectedEvalConfig:
     robot: RobotConfig
     policy: PreTrainedConfig
     detector: VisionEvalDetectorConfig = field(default_factory=VisionEvalDetectorConfig)
+    single_task: str = "Move the mug from the pink surface to the yellow surface"
+    rename_map: dict[str, str] = field(default_factory=dict)
     display_data: bool = False
     display_ip: str = "127.0.0.1"
     display_port: int | None = None
@@ -86,9 +91,12 @@ def eval_policy(cfg: DetectedEvalConfig) -> None:
         wrap_robot_cameras(
             robot=robot,
             camera_keys=target_cams,
+            detector_type=cfg.detector.detector_type,
             mode=cfg.detector.mode,
             target_objects=target_objs,
             conf_threshold=cfg.detector.conf_threshold,
+            text_threshold=cfg.detector.text_threshold,
+            sam_version=cfg.detector.sam_version,
             model_name=cfg.detector.model_name,
             device=cfg.detector.device,
             obscure_color=cfg.detector.obscure_color,
@@ -97,11 +105,14 @@ def eval_policy(cfg: DetectedEvalConfig) -> None:
         )
 
     # 3. Load Policy and Processors
-    policy = make_policy(cfg.policy)
+    policy = make_policy(cfg.policy, rename_map=cfg.rename_map or None)
     preprocessor, postprocessor = make_pre_post_processors(
         policy_cfg=cfg.policy,
         pretrained_path=cfg.policy.pretrained_path,
-        preprocessor_overrides={"device_processor": {"device": cfg.policy.device}},
+        preprocessor_overrides={
+            "device_processor": {"device": cfg.policy.device},
+            "rename_observations_processor": {"rename_map": cfg.rename_map},
+        },
     )
 
     robot.connect()
@@ -113,6 +124,8 @@ def eval_policy(cfg: DetectedEvalConfig) -> None:
         while True:
             t0 = time.perf_counter()
             obs = robot.get_observation()
+            if cfg.single_task and "task" not in obs:
+                obs["task"] = cfg.single_task
             processed_obs = preprocessor(obs) if preprocessor else obs
             action = policy.select_action(processed_obs)
             robot_action = postprocessor(action) if postprocessor else action
