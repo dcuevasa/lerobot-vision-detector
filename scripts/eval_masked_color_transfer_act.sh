@@ -9,7 +9,7 @@ cd "$SCRIPT_DIR"
 TARGET_OBJECT="${1:-cup}"
 SOURCE_COLOR="${2:-pink}"
 DEST_COLOR="${3:-yellow}"
-POLICY_PATH="${4:-bendca61/act-so101-surface-transfer-gsam-obscure-init5}"
+POLICY_PATH="${4:-bendca61/act-so101-init5-${SOURCE_COLOR}-to-${DEST_COLOR}}"
 
 TASK_DESC="Move the masked object from the ${SOURCE_COLOR} surface to the ${DEST_COLOR} surface"
 DETECTOR_TYPE="${DETECTOR_TYPE:-grounded_sam}"

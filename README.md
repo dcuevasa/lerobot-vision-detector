@@ -353,8 +353,8 @@ wrapped_cameras = wrap_cameras(
 | `scripts/teleop_mask_mug.sh` | Teleoperates with real-time instance segmentation mask over a mug. |
 | `scripts/eval_detected.sh` | Runs trained policies (ACT / Diffusion) with real-time camera detections. |
 | `scripts/mix_initial_frames_dataset.py` | Splices initial `N` obscured frames per episode with raw frames thereafter. |
-| `scripts/eval_masked_color_transfer_*.sh` | Evaluates SmolVLA / X-VLA / ACT with initial-5-frame Grounded-SAM obscuring. |
-| `scripts/run_masked_color_transfer_*_5070.sh` | Runs SmolVLA / X-VLA / ACT on RTX 5070 via `lerobot-vision-record` (`init=5f`). |
+| `scripts/eval_masked_color_transfer_*.sh` | Evaluates SmolVLA / X-VLA / ACT (`act-so101-init5-<c1>-to-<c2>`) with initial-5-frame Grounded-SAM obscuring. |
+| `scripts/run_masked_color_transfer_*_5070.sh` | Runs SmolVLA / X-VLA / ACT (`act-so101-init5-<c1>-to-<c2>`) on RTX 5070 via `lerobot-vision-record` (`init=5f`). |
 | `scripts/run_unmasked_color_transfer_smolvla_5070.sh` | Runs unmasked dual-camera SmolVLA baseline (`detector.enabled=false`). |
 
 ---
