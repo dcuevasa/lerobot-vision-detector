@@ -357,6 +357,7 @@ wrapped_cameras = wrap_cameras(
 | `scripts/run_masked_color_transfer_*_5070.sh` | Runs SmolVLA / X-VLA / ACT (`act-so101-init5-<c1>-to-<c2>`) on RTX 5070 via `lerobot-vision-record` (`init=5f`). |
 | `scripts/run_unmasked_color_transfer_smolvla_5070.sh` | Runs unmasked dual-camera SmolVLA baseline (`detector.enabled=false`). |
 | `scripts/run_unmasked_mug_yellow_to_pink_act_5070.sh` | Runs unmasked ACT specialist for mug `yellow -> pink` (`detector.enabled=false`). |
+| `scripts/run_red_block_blue_to_pink_act_5070.sh` | Runs unmasked ACT specialist for red block `blue -> pink` (`detector.enabled=false`). |
 
 ---
 
