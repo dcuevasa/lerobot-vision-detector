@@ -358,6 +358,7 @@ wrapped_cameras = wrap_cameras(
 | `scripts/run_unmasked_color_transfer_smolvla_5070.sh` | Runs unmasked dual-camera SmolVLA baseline (`detector.enabled=false`). |
 | `scripts/run_unmasked_mug_yellow_to_pink_act_5070.sh` | Runs unmasked ACT specialist for mug `yellow -> pink` (`detector.enabled=false`). |
 | `scripts/run_red_block_blue_to_pink_act_5070.sh` | Runs unmasked ACT specialist for red block `blue -> pink` (`detector.enabled=false`). |
+| `scripts/run_red_block_blue_to_pink_smolvla_5070.sh` | Runs unmasked mixed SmolVLA policy for red block / surface transfer (`detector.enabled=false`). |
 
 ---
 
