@@ -16,7 +16,17 @@ fi
 
 rm -rf "$HOME/.cache/huggingface/lerobot/local/eval_smolvla_red_block_blue_to_pink"
 
-CAMERAS_JSON='{"camera1": {"type": "intelrealsense", "serial_number_or_name": "944622074682", "width": 640, "height": 480, "fps": 30, "use_depth": false}, "camera2": {"type": "opencv", "index_or_path": "/dev/v4l/by-id/usb-Arducam_Technology_Co.__Ltd._Arducam_OV9281_USB_Camera_UC599-video-index0", "width": 640, "height": 480, "fps": 30}}'
+WRIST_CAM_UC599="/dev/v4l/by-id/usb-Arducam_Technology_Co.__Ltd._Arducam_OV9281_USB_Camera_UC599-video-index0"
+WRIST_CAM_UC684="/dev/v4l/by-id/usb-Arducam_Technology_Co.__Ltd._Arducam_1080P_Low_Light_UC684-video-index0"
+if [ -n "${WRIST_CAM_PATH:-}" ]; then
+    WRIST_CAM="$WRIST_CAM_PATH"
+elif [ -e "$WRIST_CAM_UC599" ]; then
+    WRIST_CAM="$WRIST_CAM_UC599"
+else
+    WRIST_CAM="$WRIST_CAM_UC684"
+fi
+
+CAMERAS_JSON="{\"camera1\": {\"type\": \"intelrealsense\", \"serial_number_or_name\": \"944622074682\", \"width\": 640, \"height\": 480, \"fps\": 30, \"use_depth\": false}, \"camera2\": {\"type\": \"opencv\", \"index_or_path\": \"${WRIST_CAM}\", \"width\": 640, \"height\": 480, \"fps\": 30}}"
 
 echo "=================================================================="
 echo "Running Unmasked Mixed SmolVLA Policy (RTX 5070)"
