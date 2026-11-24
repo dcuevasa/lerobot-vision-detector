@@ -5,18 +5,57 @@ POLICY_PATH="${1:-bendca61/act-so101-mug-yellow-to-pink}"
 FOLLOWER_PORT="${FOLLOWER_PORT:-/dev/ttyACM0}"
 FOLLOWER_ID="${FOLLOWER_ID:-follower_arm_test4}"
 TASK_DESC="Move the mug from the yellow surface to the pink surface"
+EXTRA_ARGS=("${@:2}")
+
+RUN_TS="$(date +%Y%m%d_%H%M%S)"
+DATASET_REPO_ID="${EVAL_DATASET_REPO_ID:-local/eval_act_mug_yellow_to_pink_${RUN_TS}}"
+EVAL_LOG_DIR="${LEROBOT_EVAL_LOG_DIR:-$PWD/eval_logs}"
 
 if [ -e "$FOLLOWER_PORT" ]; then
     sudo chmod 666 "$FOLLOWER_PORT" 2>/dev/null || true
 fi
 
-rm -rf "$HOME/.cache/huggingface/lerobot/local/eval_act_mug_yellow_to_pink"
+WRIST_CAM_UC599="/dev/v4l/by-id/usb-Arducam_Technology_Co.__Ltd._Arducam_OV9281_USB_Camera_UC599-video-index0"
+WRIST_CAM_UC684="/dev/v4l/by-id/usb-Arducam_Technology_Co.__Ltd._Arducam_1080P_Low_Light_UC684-video-index0"
+if [ -n "${WRIST_CAM_PATH:-}" ]; then
+    WRIST_CAM="$WRIST_CAM_PATH"
+elif [ -e "$WRIST_CAM_UC599" ]; then
+    WRIST_CAM="$WRIST_CAM_UC599"
+else
+    WRIST_CAM="$WRIST_CAM_UC684"
+fi
 
-CAMERAS_JSON='{"cam_high": {"type": "intelrealsense", "serial_number_or_name": "944622074682", "width": 640, "height": 480, "fps": 30, "use_depth": false}, "cam_wrist": {"type": "opencv", "index_or_path": "/dev/v4l/by-id/usb-Arducam_Technology_Co.__Ltd._Arducam_OV9281_USB_Camera_UC599-video-index0", "width": 640, "height": 480, "fps": 30}}'
+CAMERAS_JSON="{\"cam_high\": {\"type\": \"intelrealsense\", \"serial_number_or_name\": \"944622074682\", \"width\": 640, \"height\": 480, \"fps\": 30, \"use_depth\": false}, \"cam_wrist\": {\"type\": \"opencv\", \"index_or_path\": \"${WRIST_CAM}\", \"width\": 640, \"height\": 480, \"fps\": 30}}"
+
+AUTO_POLICY_ARGS=()
+while IFS= read -r _arg; do
+    [[ "$_arg" == --policy.* ]] && AUTO_POLICY_ARGS+=("$_arg")
+done < <(python3 -m lerobot_vision_detector.cli.rollout_logging --print-policy-args "$POLICY_PATH" --policy-type act -- "${EXTRA_ARGS[@]}" 2>/dev/null || true)
+
+analyze_on_exit() {
+    local _ds_dir="$HOME/.cache/huggingface/lerobot/${DATASET_REPO_ID}"
+    if [ -d "${_ds_dir}/data" ]; then
+        echo "Analyzing & logging rollout telemetry for ${DATASET_REPO_ID}..."
+        python3 -m lerobot_vision_detector.cli.rollout_logging \
+          --dataset-root "$_ds_dir" \
+          --dataset-repo-id "$DATASET_REPO_ID" \
+          --policy-path "$POLICY_PATH" \
+          --policy-type act \
+          --task "$TASK_DESC" \
+          --log-dir "$EVAL_LOG_DIR" \
+          --extra-args "${EXTRA_ARGS[*]:-}" \
+          --outcome "${EVAL_OUTCOME:-recorded}" \
+          --notes "${EVAL_NOTES:-}" || true
+    fi
+}
+trap analyze_on_exit EXIT
 
 echo "=================================================================="
 echo "Running Unmasked ACT Specialist: Mug Yellow -> Pink (RTX 5070)"
 echo "  Policy:          $POLICY_PATH"
+echo "  Synced Args:     ${AUTO_POLICY_ARGS[*]:-none}"
+echo "  Dataset Repo:    $DATASET_REPO_ID"
+echo "  Eval Log Dir:    $EVAL_LOG_DIR"
 echo "  Task Label:      $TASK_DESC"
 echo "  Detector:        DISABLED (raw cam_high + cam_wrist)"
 echo "=================================================================="
@@ -27,7 +66,7 @@ lerobot-vision-record \
   --robot.id="$FOLLOWER_ID" \
   --robot.cameras="$CAMERAS_JSON" \
   --detector.enabled=false \
-  --dataset.repo_id=local/eval_act_mug_yellow_to_pink \
+  --dataset.repo_id="$DATASET_REPO_ID" \
   --dataset.num_episodes=1 \
   --dataset.single_task="$TASK_DESC" \
   --dataset.push_to_hub=false \
@@ -35,4 +74,5 @@ lerobot-vision-record \
   --policy.pretrained_path="$POLICY_PATH" \
   --policy.device=cuda \
   --display_data=true \
-  "${@:2}"
+  "${AUTO_POLICY_ARGS[@]}" \
+  "${EXTRA_ARGS[@]}"

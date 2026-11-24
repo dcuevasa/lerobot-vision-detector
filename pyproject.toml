@@ -40,6 +40,7 @@ lerobot-vision-record = "lerobot_vision_detector.cli.record:record"
 lerobot-vision-teleoperate = "lerobot_vision_detector.cli.teleoperate:teleoperate"
 lerobot-vision-eval = "lerobot_vision_detector.cli.eval_policy:eval_policy"
 lerobot-vision-list-classes = "lerobot_vision_detector.cli.list_classes:main"
+lerobot-vision-analyze = "lerobot_vision_detector.cli.rollout_logging:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

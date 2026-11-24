@@ -5,6 +5,7 @@ TARGET_OBJECT="${1:-cup}"
 SOURCE_COLOR="${2:-pink}"
 DEST_COLOR="${3:-yellow}"
 POLICY_PATH="${4:-bendca61/smolvla-so101-surface-transfer-gsam-obscure-init5}"
+EXTRA_ARGS=("${@:5}")
 
 TASK_DESC="Move the masked object from the ${SOURCE_COLOR} surface to the ${DEST_COLOR} surface"
 FOLLOWER_PORT="${FOLLOWER_PORT:-/dev/ttyACM0}"
@@ -14,11 +15,13 @@ SAM_VERSION="${SAM_VERSION:-vit_b}"
 INITIAL_FRAMES="${INITIAL_FRAMES:-5}"
 DETECTOR_MODEL="${DETECTOR_MODEL:-$SAM_VERSION}"
 
+RUN_TS="$(date +%Y%m%d_%H%M%S)"
+DATASET_REPO_ID="${EVAL_DATASET_REPO_ID:-local/eval_smolvla_masked_transfer_${RUN_TS}}"
+EVAL_LOG_DIR="${LEROBOT_EVAL_LOG_DIR:-$PWD/eval_logs}"
+
 if [ -e "$FOLLOWER_PORT" ]; then
     sudo chmod 666 "$FOLLOWER_PORT" 2>/dev/null || true
 fi
-
-rm -rf "$HOME/.cache/huggingface/lerobot/local/eval_smolvla_masked_transfer"
 
 WRIST_CAM_UC599="/dev/v4l/by-id/usb-Arducam_Technology_Co.__Ltd._Arducam_OV9281_USB_Camera_UC599-video-index0"
 WRIST_CAM_UC684="/dev/v4l/by-id/usb-Arducam_Technology_Co.__Ltd._Arducam_1080P_Low_Light_UC684-video-index0"
@@ -32,9 +35,35 @@ fi
 
 CAMERAS_JSON="{\"camera1\": {\"type\": \"intelrealsense\", \"serial_number_or_name\": \"944622074682\", \"width\": 640, \"height\": 480, \"fps\": 30, \"use_depth\": false}, \"camera2\": {\"type\": \"opencv\", \"index_or_path\": \"${WRIST_CAM}\", \"width\": 640, \"height\": 480, \"fps\": 30}}"
 
+AUTO_POLICY_ARGS=()
+while IFS= read -r _arg; do
+    [[ "$_arg" == --policy.* ]] && AUTO_POLICY_ARGS+=("$_arg")
+done < <(python3 -m lerobot_vision_detector.cli.rollout_logging --print-policy-args "$POLICY_PATH" --policy-type smolvla -- "${EXTRA_ARGS[@]}" 2>/dev/null || true)
+
+analyze_on_exit() {
+    local _ds_dir="$HOME/.cache/huggingface/lerobot/${DATASET_REPO_ID}"
+    if [ -d "${_ds_dir}/data" ]; then
+        echo "Analyzing & logging rollout telemetry for ${DATASET_REPO_ID}..."
+        python3 -m lerobot_vision_detector.cli.rollout_logging \
+          --dataset-root "$_ds_dir" \
+          --dataset-repo-id "$DATASET_REPO_ID" \
+          --policy-path "$POLICY_PATH" \
+          --policy-type smolvla \
+          --task "$TASK_DESC (target=$TARGET_OBJECT)" \
+          --log-dir "$EVAL_LOG_DIR" \
+          --extra-args "${EXTRA_ARGS[*]:-}" \
+          --outcome "${EVAL_OUTCOME:-recorded}" \
+          --notes "${EVAL_NOTES:-}" || true
+    fi
+}
+trap analyze_on_exit EXIT
+
 echo "=================================================================="
 echo "Running SmolVLA Masked-Object Surface Transfer (RTX 5070)"
 echo "  Policy:          $POLICY_PATH"
+echo "  Synced Args:     ${AUTO_POLICY_ARGS[*]:-none}"
+echo "  Dataset Repo:    $DATASET_REPO_ID"
+echo "  Eval Log Dir:    $EVAL_LOG_DIR"
 echo "  Policy Prompt:   $TASK_DESC"
 echo "  Detector Target: $TARGET_OBJECT ($DETECTOR_TYPE / $DETECTOR_MODEL, mode=obscure, init=${INITIAL_FRAMES}f)"
 echo "=================================================================="
@@ -55,7 +84,7 @@ lerobot-vision-record \
   --detector.distractor_objects="robot" \
   --detector.model_name="$DETECTOR_MODEL" \
   --detector.conf_threshold=0.25 \
-  --dataset.repo_id=local/eval_smolvla_masked_transfer \
+  --dataset.repo_id="$DATASET_REPO_ID" \
   --dataset.num_episodes=1 \
   --dataset.single_task="$TASK_DESC" \
   --dataset.push_to_hub=false \
@@ -63,4 +92,5 @@ lerobot-vision-record \
   --policy.pretrained_path="$POLICY_PATH" \
   --policy.device=cuda \
   --display_data=true \
-  "${@:5}"
+  "${AUTO_POLICY_ARGS[@]}" \
+  "${EXTRA_ARGS[@]}"

@@ -362,6 +362,7 @@ wrapped_cameras = wrap_cameras(
 | `scripts/run_red_block_blue_to_pink_smolvla_vlm_5070.sh` | Runs unmasked unfrozen-VLM SmolVLA specialist for red block `blue -> pink` (`detector.enabled=false`, `UC599 -> UC684` fallback). |
 | `scripts/run_red_block_blue_to_pink_diffusion_5070.sh` | Runs unmasked Diffusion Policy (`DDIM`, `16` steps) for red block `blue -> pink` (`detector.enabled=false`, `UC599 -> UC684` fallback). |
 | `scripts/run_red_block_blue_to_pink_xvla_5070.sh` | Runs unmasked X-VLA (0.9B) specialist for red block `blue -> pink` (`detector.enabled=false`, `UC599 -> UC684` fallback). |
+| `lerobot-vision-analyze` (`cli/rollout_logging.py`) | Generalist CLI & Python module that syncs `config.json` policy flags and analyzes/logs recorded LeRobot rollouts into `rollout_analysis.{json,md}`, `eval_history.jsonl`, and `EVAL_RESULTS_LOG.md`. |
 
 ---
 
